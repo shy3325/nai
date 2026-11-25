@@ -1,0 +1,2506 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NAI Prompt & Image Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+--bg:#0f0f14;--surface:#1a1a24;--surface2:#22223a;--surface3:#2a2a42;
+--accent:#6c5ce7;--accent2:#a29bfe;--accent3:#fd79a8;
+--text:#e8e8f0;--text2:#a0a0b8;--text3:#6c6c88;
+--border:#2d2d48;--success:#00b894;--danger:#e17055;--warn:#fdcb6e;
+--radius:8px;--radius2:12px;
+}
+body{font-family:'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:var(--surface);}
+::-webkit-scrollbar-thumb{background:var(--surface3);border-radius:3px;}
+::-webkit-scrollbar-thumb:hover{background:var(--accent);}
+
+.fixed-top{position:fixed;top:0;left:0;right:0;z-index:50;background:var(--bg);border-bottom:1px solid var(--border);box-shadow:0 2px 12px rgba(0,0,0,.4);}
+.fixed-top-inner{max-width:1100px;margin:0 auto;padding:8px 16px;}
+
+.app-header{display:flex;align-items:center;justify-content:space-between;padding:4px 6px;}
+.app-title{font-size:18px;font-weight:700;background:linear-gradient(135deg,var(--accent),var(--accent3));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header-actions{display:flex;gap:6px;align-items:center;}
+.icon-btn{width:32px;height:32px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);border-radius:var(--radius);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:.2s;}
+.icon-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--surface3);}
+.collapse-btn{font-size:11px;width:auto;padding:0 8px;gap:3px;}
+.collapse-btn span.arrow{transition:transform .2s;display:inline-block;font-size:10px;}
+.collapse-btn.collapsed span.arrow{transform:rotate(180deg);}
+
+.status-bar{display:flex;align-items:center;gap:6px;padding:2px 0;font-size:10px;color:var(--text3);flex-wrap:wrap;}
+.status-dot{width:5px;height:5px;border-radius:50%;background:var(--danger);}
+.status-dot.connected{background:var(--success);}
+.queue-status-pill{display:none;align-items:center;gap:4px;padding:1px 8px;border-radius:10px;background:rgba(253,121,168,.18);border:1px solid var(--accent3);color:var(--accent3);font-weight:600;}
+.queue-status-pill.active{display:inline-flex;}
+
+.params-bar{display:flex;flex-wrap:wrap;gap:6px 12px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);align-items:center;font-size:12px;margin-top:4px;overflow:hidden;transition:max-height .3s ease,padding .3s ease,margin .3s ease,opacity .3s ease;}
+.params-bar.collapsed{max-height:0;padding:0 12px;margin-top:0;border-color:transparent;opacity:0;}
+.param-group{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.param-label{white-space:nowrap;font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;}
+.count-select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:3px 8px;font-size:11px;}
+.param-divider{width:1px;height:18px;background:var(--border);margin:0 2px;}
+
+.pval-suffix-area{display:flex;gap:4px;flex-wrap:wrap;align-items:center;max-height:78px;overflow-y:auto;}
+.pval-item{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border:1px solid var(--border);border-radius:16px;font-size:11px;cursor:pointer;background:transparent;color:var(--text2);transition:.2s;user-select:none;}
+.pval-item.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.pval-item.style-preset.active{background:linear-gradient(135deg,var(--accent),var(--accent3));border-color:var(--accent3);}
+.pval-item .pval-edit{font-size:10px;opacity:.75;cursor:pointer;margin-left:3px;}
+.pval-item .pval-edit:hover{opacity:1;color:var(--warn);}
+.add-pval-btn{width:20px;height:20px;border:1px dashed var(--border);border-radius:50%;background:transparent;color:var(--text3);cursor:pointer;font-size:11px;display:inline-flex;align-items:center;justify-content:center;transition:.2s;}
+.add-pval-btn:hover{border-color:var(--accent);color:var(--accent);}
+
+.scroll-content{max-width:1100px;margin:0 auto;padding:12px 16px;}
+
+.input-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);padding:12px;margin-bottom:10px;}
+.tags-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.tags-header .edit-tags-btn{font-size:10px;padding:2px 8px;border:1px solid var(--border);border-radius:10px;background:transparent;color:var(--text3);cursor:pointer;transition:.2s;}
+.tags-header .edit-tags-btn.active{border-color:var(--accent3);color:var(--accent3);}
+.tags-area{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:8px;align-items:center;}
+.tag{padding:2px 9px;border:1px solid var(--border);border-radius:14px;font-size:11px;cursor:pointer;background:transparent;color:var(--text2);transition:.2s;display:flex;align-items:center;gap:4px;}
+.tag.selected{background:var(--accent);border-color:var(--accent);color:#fff;}
+.tag .remove-tag{font-size:9px;opacity:.6;cursor:pointer;display:none;}
+.tags-area.edit-mode .tag .remove-tag{display:inline;}
+.add-tag-btn{width:24px;height:24px;border:1px dashed var(--border);border-radius:50%;background:transparent;color:var(--text3);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;}
+
+.input-row{display:flex;gap:8px;}
+.prompt-input{flex:1;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:8px 12px;font-size:13px;resize:none;min-height:54px;font-family:inherit;line-height:1.5;}
+.prompt-input:focus{outline:none;border-color:var(--accent);}
+.action-btns{display:flex;flex-direction:column;gap:5px;}
+.btn{padding:7px 16px;border:none;border-radius:var(--radius);cursor:pointer;font-size:12px;font-weight:600;transition:.2s;white-space:nowrap;}
+.btn-primary{background:linear-gradient(135deg,var(--accent),#8b5cf6);color:#fff;}
+.btn-secondary{background:var(--surface3);color:var(--text2);border:1px solid var(--border);}
+.btn-accent3{background:linear-gradient(135deg,var(--accent3),#e84393);color:#fff;}
+.btn-danger{background:var(--danger);color:#fff;}
+
+.image-upload-panel{margin-top:10px;padding:10px;background:var(--surface2);border:1px dashed var(--border);border-radius:var(--radius);display:none;}
+.image-upload-panel.active{display:block;}
+.image-preview-area{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px;}
+.image-preview-item{position:relative;width:68px;height:68px;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);}
+.image-preview-item img{width:100%;height:100%;object-fit:cover;}
+.image-preview-item .remove-img{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,.75);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.add-img-label{display:inline-flex;flex-direction:column;align-items:center;justify-content:center;width:68px;height:68px;border:1px dashed var(--accent2);border-radius:var(--radius);background:rgba(108,92,231,.08);color:var(--accent2);cursor:pointer;font-size:11px;gap:2px;transition:.2s;}
+.add-img-label:hover{background:rgba(108,92,231,.18);border-color:var(--accent3);color:var(--accent3);}
+
+.results-section{min-height:180px;}
+.results-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:10px;}
+.result-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);padding:12px 12px 42px 12px;position:relative;cursor:pointer;transition:.2s;min-height:135px;user-select:text;}
+.result-card:hover{border-color:var(--accent);transform:translateY(-2px);}
+.result-card .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:4px;}
+.result-card .card-index{font-size:11px;color:var(--accent2);font-weight:600;}
+.result-card.neg-mode .card-index{color:var(--danger);}
+.swap-btn{padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:var(--surface2);color:var(--text2);cursor:pointer;font-size:10px;transition:.2s;}
+.swap-btn:hover{border-color:var(--accent3);color:var(--accent3);}
+.result-text{font-size:12px;line-height:1.6;color:var(--text);word-break:break-word;font-family:monospace;padding:4px 0;}
+.save-style-btn{position:absolute;bottom:8px;left:10px;padding:4px 10px;font-size:11px;border-radius:12px;background:var(--surface3);color:var(--accent2);border:1px solid var(--accent);cursor:pointer;transition:.2s;}
+.save-style-btn:hover{background:var(--accent);color:#fff;}
+.send-to-img-btn{position:absolute;bottom:8px;right:10px;padding:4px 10px;font-size:11px;border-radius:12px;background:linear-gradient(135deg,var(--accent3),#e84393);color:#fff;border:none;cursor:pointer;transition:.2s;}
+.send-to-img-btn:hover{opacity:.9;transform:scale(1.03);}
+
+/* Page Flip Container */
+.page-switch-btn.active{border-color:var(--accent3);color:var(--accent3);background:var(--surface3);}
+#imgGenPage{display:none;}
+#imgGenPage.active{display:block;}
+#promptPage.hidden{display:none;}
+
+/* 生图页顶部横向并列折叠导航栏 */
+.top-tabs-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+@media(max-width:640px){.top-tabs-row{grid-template-columns:1fr;}}
+.top-tab-btn{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);padding:10px 12px;color:var(--text2);font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:.2s;user-select:none;}
+.top-tab-btn:hover{border-color:var(--accent);color:var(--text);}
+.top-tab-btn.active{background:var(--surface2);border-color:var(--accent3);color:var(--accent3);box-shadow:0 2px 10px rgba(253,121,168,.15);}
+.top-tab-btn .tab-arrow{font-size:10px;transition:transform .2s;}
+.top-tab-btn.active .tab-arrow{transform:rotate(180deg);}
+
+.collapsible-panel{display:none;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);padding:14px;margin-bottom:10px;animation:fadeIn .2s ease;}
+.collapsible-panel.open{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px);}to{opacity:1;transform:translateY(0);}}
+
+.img-gen-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);padding:14px;margin-bottom:10px;}
+.img-gen-section-title{font-size:12px;font-weight:600;color:var(--accent2);margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;user-select:none;flex-wrap:wrap;gap:6px;}
+.form-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}
+.form-group{margin-bottom:10px;flex:1;min-width:140px;}
+.form-label{font-size:11px;color:var(--text3);margin-bottom:3px;display:block;}
+.form-input,.model-select{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:7px 10px;font-size:12px;}
+
+.anlas-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;background:var(--surface2);border:1px solid var(--warn);border-radius:16px;color:var(--warn);font-size:11px;font-weight:600;}
+.cost-badge{font-size:11px;color:var(--text2);margin-left:8px;}
+
+.img-size-pills{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}
+.img-size-pill{padding:4px 11px;border:1px solid var(--border);border-radius:16px;font-size:11px;cursor:pointer;background:transparent;color:var(--text2);transition:.2s;display:inline-flex;align-items:center;gap:4px;}
+.img-size-pill.active{background:var(--accent3);border-color:var(--accent3);color:#fff;}
+.img-size-pill .del-size{font-size:9px;opacity:.7;margin-left:2px;}
+.img-size-pill .del-size:hover{opacity:1;color:var(--warn);}
+.custom-size-bar{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap;font-size:12px;}
+.size-num-input{width:80px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:4px 8px;font-size:12px;text-align:center;}
+
+.img-prompt-input{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);color:var(--text);padding:10px 12px;font-size:12px;resize:vertical;min-height:60px;font-family:monospace;line-height:1.5;margin-bottom:8px;}
+
+.checkerboard-bg{
+  background-color:#181820;
+  background-image:linear-gradient(45deg,#252532 25%,transparent 25%),linear-gradient(-45deg,#252532 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#252532 75%),linear-gradient(-45deg,transparent 75%,#252532 75%);
+  background-size:16px 16px;
+  background-position:0 0,0 8px,8px -8px,-8px 0;
+}
+
+/* 最新单图展示区 */
+.latest-img-container{display:flex;justify-content:center;align-items:center;}
+.latest-img-card{width:100%;max-width:290px;border-radius:var(--radius2);overflow:hidden;border:1px solid var(--border);background:var(--surface2);display:flex;flex-direction:column;}
+.latest-img-card .img-result-thumb-wrap{position:relative;width:100%;max-height:340px;aspect-ratio:auto;display:flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;}
+.latest-img-card .img-result-thumb-wrap img{max-width:100%;max-height:340px;object-fit:contain;transition:transform .2s;}
+.latest-img-card .img-result-thumb-wrap:hover img{transform:scale(1.02);}
+
+/* 历史记录小图紧凑网格 + 批量选择 + 左下角直接下载 + 渲染加速 */
+.saved-history-small-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;max-height:280px;overflow-y:auto;padding:2px;contain:content;}
+.small-history-card{position:relative;border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);background:var(--surface2);aspect-ratio:1/1;cursor:pointer;transition:transform .15s,border-color .15s;contain:layout paint;}
+.small-history-card:hover{border-color:var(--accent3);transform:scale(1.03);}
+.small-history-card.batch-selected{border:2px solid var(--accent3);box-shadow:0 0 0 2px rgba(253,121,168,.35);}
+.small-history-card img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+.small-history-card .small-del-btn{position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:rgba(0,0,0,.78);color:#fff;border:none;font-size:10px;display:none;align-items:center;justify-content:center;cursor:pointer;z-index:3;}
+.small-history-card:hover .small-del-btn{display:flex;}
+.small-history-card .small-del-btn:hover{background:var(--danger);}
+.small-history-card .small-dl-btn{position:absolute;bottom:3px;left:3px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,.78);color:#fff;border:none;font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:3;opacity:.85;transition:.2s;}
+.small-history-card .small-dl-btn:hover{opacity:1;background:var(--accent);}
+.small-history-card .batch-check-badge{position:absolute;top:4px;left:4px;width:20px;height:20px;border-radius:4px;background:rgba(0,0,0,.75);border:1.5px solid #fff;color:#fff;font-size:12px;display:none;align-items:center;justify-content:center;z-index:4;}
+.saved-history-small-grid.batch-mode .small-history-card .batch-check-badge{display:flex;}
+.small-history-card.batch-selected .batch-check-badge{background:var(--accent3);border-color:var(--accent3);}
+
+.img-card-footer{padding:6px 8px;background:var(--surface2);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:4px;font-size:10px;color:var(--text2);}
+.img-card-actions{display:flex;gap:4px;align-items:center;}
+.mini-act-btn{padding:3px 7px;border-radius:4px;border:1px solid var(--border);background:var(--surface3);color:var(--text);cursor:pointer;font-size:10px;transition:.2s;}
+.mini-act-btn:hover{border-color:var(--accent);color:var(--accent2);}
+.mini-act-btn.dl{border-color:var(--accent);color:var(--accent2);}
+.mini-act-btn.dl:hover{background:var(--accent);color:#fff;}
+.mini-act-btn.del:hover{border-color:var(--danger);color:var(--danger);}
+
+/* 酒馆预设列表样式 */
+.st-preset-section{margin-top:14px;padding-top:14px;border-top:1px solid var(--border);}
+.st-preset-list{max-height:240px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin-top:8px;}
+.st-preset-item{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);font-size:12px;}
+.st-preset-item.disabled{opacity:.55;}
+.st-preset-info{flex:1;min-width:0;cursor:pointer;}
+.st-preset-name{font-weight:600;color:var(--text);display:flex;align-items:center;gap:6px;}
+.st-role-badge{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--surface3);color:var(--accent2);font-weight:normal;}
+.st-preset-preview{font-size:11px;color:var(--text3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;}
+
+.copy-toast{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--accent);color:#fff;padding:10px 26px;border-radius:20px;font-size:13px;font-weight:600;z-index:9999;pointer-events:none;opacity:0;transition:opacity .25s;box-shadow:0 4px 16px rgba(0,0,0,.5);}
+.copy-toast.show{opacity:1;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);padding:16px;}
+.modal-overlay.show{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);width:100%;max-width:720px;max-height:88vh;overflow-y:auto;padding:20px;}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.modal-title{font-size:15px;font-weight:700;}
+.modal-close{border:none;background:transparent;color:var(--text3);cursor:pointer;font-size:18px;}
+.small-btn{padding:3px 9px;border:1px solid var(--border);border-radius:4px;background:var(--surface3);color:var(--text);cursor:pointer;font-size:11px;transition:.2s;}
+.small-btn:hover{border-color:var(--accent);color:var(--accent2);}
+.small-btn.active-mode{border-color:var(--accent3);color:var(--accent3);background:rgba(253,121,168,.12);}
+.loading-indicator{display:none;text-align:center;padding:20px;color:var(--text3);}
+.loading-indicator.show{display:block;}
+.empty-state{text-align:center;padding:24px 16px;color:var(--text3);font-size:12px;}
+.toggle-switch{position:relative;width:32px;height:17px;cursor:pointer;display:inline-block;vertical-align:middle;}
+.toggle-switch input{display:none;}
+.toggle-slider{position:absolute;inset:0;background:var(--surface3);border-radius:17px;transition:.2s;}
+.toggle-slider::before{content:'';position:absolute;width:13px;height:13px;border-radius:50%;background:var(--text3);top:2px;left:2px;transition:.2s;}
+.toggle-switch input:checked+.toggle-slider{background:var(--accent3);}
+.toggle-switch input:checked+.toggle-slider::before{transform:translateX(15px);background:#fff;}
+
+/* Image Detail Modal */
+.detail-grid{display:grid;grid-template-columns:260px 1fr;gap:16px;}
+@media(max-width:640px){.detail-grid{grid-template-columns:1fr;}}
+.detail-img-box{border-radius:var(--radius);overflow:hidden;border:1px solid var(--border);max-height:380px;display:flex;align-items:center;justify-content:center;}
+.detail-img-box img{max-width:100%;max-height:380px;object-fit:contain;}
+.detail-info-box{display:flex;flex-direction:column;gap:8px;font-size:12px;}
+.detail-code{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:8px;font-family:monospace;font-size:11px;line-height:1.5;word-break:break-all;max-height:110px;overflow-y:auto;color:var(--text);cursor:pointer;transition:.2s;}
+.detail-code:hover{border-color:var(--accent);}
+.detail-meta-tags{display:flex;flex-wrap:wrap;gap:6px;}
+.detail-meta-tag{background:var(--surface3);padding:3px 8px;border-radius:6px;font-size:11px;color:var(--accent2);}
+</style>
+</head>
+<body>
+
+<div class="fixed-top" id="fixedTop">
+  <div class="fixed-top-inner">
+    <div class="app-header">
+      <div class="app-title">NAI Prompt & Image Studio</div>
+      <div class="header-actions">
+        <button class="icon-btn page-switch-btn" id="pageSwitchBtn" onclick="switchPage()" title="翻转至NAI生图页面">🎨</button>
+        <button class="icon-btn collapse-btn" id="collapseBtn" onclick="toggleParamsCollapse()" title="折叠/展开参数">
+          <span class="arrow">▲</span>
+        </button>
+        <button class="icon-btn" onclick="openHistory()" title="提示词历史记录">📋</button>
+        <button class="icon-btn" onclick="openSettings()" title="设置与酒馆预设">⚙</button>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">LLM 未连接</span>
+      <span id="stPresetStatusBadge" style="margin-left:8px;color:var(--accent2);"></span>
+      <span class="queue-status-pill" id="topQueueBadge">⏳ 生图队列运行中 (0)</span>
+      <span style="margin-left:auto;" id="modelDisplay"></span>
+    </div>
+    <div class="params-bar" id="paramsBar">
+      <div class="param-group">
+        <span class="param-label">生成组数</span>
+        <select class="count-select" id="groupCount" onchange="saveParams()">
+          <option value="1">1 组</option><option value="2">2 组</option><option value="3" selected>3 组</option><option value="4">4 组</option><option value="5">5 组</option>
+        </select>
+      </div>
+      <div class="param-divider"></div>
+      <div class="param-group">
+        <span class="param-label" title="勾选后将保留对应画师串或模仿保存的完整风格结构">画师串与风格预设</span>
+        <div class="pval-suffix-area" id="artistArea"></div>
+        <button class="add-pval-btn" onclick="addArtistPrompt()" title="手动添加画师串预设">+</button>
+      </div>
+      <div class="param-divider"></div>
+      <div class="param-group">
+        <span class="param-label">思考预提示</span>
+        <div class="pval-suffix-area" id="thinkArea"></div>
+        <button class="add-pval-btn" onclick="addThinkPrompt()" title="添加思考预提示">+</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="scroll-content" id="scrollContent">
+
+  <div id="promptPage">
+    <div class="input-section">
+      <div class="tags-header">
+        <span style="font-size:11px;color:var(--text3);">快捷标签 (Danbooru Tags / 元素)</span>
+        <button class="edit-tags-btn" id="editTagsBtn" onclick="toggleTagEditMode()">编辑</button>
+      </div>
+      <div class="tags-area" id="tagsArea"></div>
+      <div class="input-row">
+        <textarea class="prompt-input" id="promptInput" placeholder="输入画面描述（如已勾选“保留的风格预设”，AI将自动保留该画师串与画风结构，仅替换角色/动作描述）..." rows="2"></textarea>
+        <div class="action-btns">
+          <button class="btn btn-primary" onclick="handleGenerate()">生成</button>
+          <button class="btn btn-secondary" onclick="handleRefresh()">刷新</button>
+          <button class="btn btn-accent3" id="imageGenBtn" onclick="handleImageGen()">识图</button>
+        </div>
+      </div>
+
+      <input type="file" id="hiddenImageInput" accept="image/*" multiple style="display:none;" onchange="handleFilesSelected(event)">
+      <div class="image-upload-panel" id="imageUploadPanel" ondragover="event.preventDefault()" ondrop="handleDropFiles(event)">
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--text2);">
+          <span>📷 识图模式已开启：点击下方「+ 添加图片」选择相册/本地图片，或直接拖拽图片到此处（已自动压缩优化，不占本地配额）</span>
+          <button class="small-btn" onclick="clearAllUploadedImages()">清空图片</button>
+        </div>
+        <div class="image-preview-area" id="imagePreviewArea"></div>
+      </div>
+    </div>
+
+    <div class="results-section">
+      <div class="loading-indicator" id="loadingIndicator">
+        <p style="font-size:12px;">正在构思 NAI 提示词与负面词...</p>
+      </div>
+      <div class="results-grid" id="resultsGrid"></div>
+      <div class="empty-state" id="emptyState">
+        <p>输入需求后点击生成 · 点击卡片任意位置直接复制词条 · 点击「一键生图」将自动加入后台排队生图并保存到本地</p>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ==================== NAI 生图页面（顶部横向并列默认折叠） ==================== -->
+  <div id="imgGenPage">
+    <div class="top-tabs-row">
+      <button class="top-tab-btn" id="tabBtn_api" onclick="toggleImgTopSection('api')">
+        <span>🔑 API 配置与点数</span>
+        <span style="display:flex;align-items:center;gap:6px;">
+          <span class="anlas-badge" id="anlasDisplay">⚡ --</span>
+          <span class="tab-arrow">▼</span>
+        </span>
+      </button>
+      <button class="top-tab-btn" id="tabBtn_params" onclick="toggleImgTopSection('params')">
+        <span>⚙ 生图模型与参数</span>
+        <span class="tab-arrow">▼</span>
+      </button>
+      <button class="top-tab-btn" id="tabBtn_prompts" onclick="toggleImgTopSection('prompts')">
+        <span>📝 提示词与立即生图</span>
+        <span class="tab-arrow">▼</span>
+      </button>
+    </div>
+
+    <div class="collapsible-panel" id="panel_api">
+      <div class="img-gen-section-title">
+        <span>🔑 NovelAI API 配置与点数查询</span>
+        <button class="small-btn" onclick="toggleImgTopSection('api')">收起 ▲</button>
+      </div>
+      <div class="form-row">
+        <div class="form-group" style="flex:2;">
+          <label class="form-label">NAI Persistent API Token (pst-...)</label>
+          <input class="form-input" id="naiApiKey" type="text" placeholder="pst-..." onchange="saveNaiConfig()">
+        </div>
+        <div class="form-group" style="flex:1;">
+          <label class="form-label">API 代理地址 (默认官方)</label>
+          <input class="form-input" id="naiApiUrl" type="text" value="https://image.novelai.net" onchange="saveNaiConfig()">
+        </div>
+        <div class="form-group" style="flex:0;">
+          <button class="btn btn-secondary" onclick="checkNaiBalance()">查询余额</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible-panel" id="panel_params">
+      <div class="img-gen-section-title">
+        <span>⚙ NAI 生图模型与参数设置</span>
+        <button class="small-btn" onclick="toggleImgTopSection('params')">收起 ▲</button>
+      </div>
+      <div class="form-row" style="margin-bottom:10px;">
+        <div class="form-group" style="min-width:220px;">
+          <label class="form-label">模型 (Model)</label>
+          <select class="model-select" id="naiModel" onchange="saveNaiConfig()">
+            <option value="nai-diffusion-5-curated">NAI Diffusion V5 Curated（精选版）</option>
+            <option value="nai-diffusion-5-full" selected>NAI Diffusion V5 Full（完整版）</option>
+            <option value="nai-diffusion-4-5-curated">NAI Diffusion V4.5 Curated（精选版）</option>
+            <option value="nai-diffusion-4-5-full">NAI Diffusion V4.5 Full（完整版）</option>
+            <option value="nai-diffusion-4-full">NAI Diffusion V4 Full（完整版）</option>
+            <option value="nai-diffusion-4-curated-preview">NAI Diffusion V4 Curated（精选版）</option>
+            <option value="nai-diffusion-3">NAI Diffusion 3</option>
+            <option value="nai-diffusion-furry-3">NAI Diffusion Furry 3</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">采样器 (Sampler)</label>
+          <select class="model-select" id="naiSampler" onchange="saveNaiConfig()">
+            <option value="k_euler_ancestral" selected>Euler Ancestral</option>
+            <option value="k_euler">Euler</option>
+            <option value="k_dpmpp_2s_ancestral">DPM++ 2S Ancestral</option>
+            <option value="k_dpmpp_2m">DPM++ 2M</option>
+            <option value="k_dpmpp_sde">DPM++ SDE</option>
+            <option value="ddim_v3">DDIM</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">步数 (Steps): <span id="stepsValDisp">28</span></label>
+          <input type="range" min="1" max="50" value="28" id="naiSteps" style="width:100%;" oninput="updateNaiCost()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">引导系数 (CFG Scale): <span id="cfgValDisp">5.0</span></label>
+          <input type="range" min="1" max="10" step="0.5" value="5" id="naiCfg" style="width:100%;" oninput="document.getElementById('cfgValDisp').textContent=this.value;saveNaiConfig()">
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label class="form-label">画面比例与自定义分辨率 (支持自定义任意 64 倍数尺寸并保存预设)</label>
+        <div class="img-size-pills" id="naiSizePills"></div>
+        <div class="custom-size-bar">
+          <span style="color:var(--text3);">当前/自定义宽(W):</span>
+          <input type="number" step="64" min="256" max="2048" class="size-num-input" id="customWidthInput" value="832" onchange="onCustomSizeInput()">
+          <span style="color:var(--text3);">× 高(H):</span>
+          <input type="number" step="64" min="256" max="2048" class="size-num-input" id="customHeightInput" value="1216" onchange="onCustomSizeInput()">
+          <button class="small-btn" onclick="swapCustomSize()" title="互换宽高">⇄ 互换宽高</button>
+          <button class="small-btn" style="border-color:var(--accent2);color:var(--accent2);" onclick="addCustomSizePreset()">+ 保存为快捷比例</button>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:18px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="form-label" style="margin:0;color:var(--accent3);font-weight:600;">透明底 (自动抠除背景转透明PNG)</span>
+          <label class="toggle-switch"><input type="checkbox" id="naiTransparent" onchange="saveNaiConfig()"><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="form-label" style="margin:0;">透明容差: <span id="tolValDisp">28</span></span>
+          <input type="range" min="5" max="80" value="28" id="naiTransTol" style="width:80px;" oninput="document.getElementById('tolValDisp').textContent=this.value;saveNaiConfig()">
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="form-label" style="margin:0;">SMEA (仅V3生效)</span>
+          <label class="toggle-switch"><input type="checkbox" id="naiSmea" checked onchange="saveNaiConfig()"><span class="toggle-slider"></span></label>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="form-label" style="margin:0;">DYN (仅V3生效)</span>
+          <label class="toggle-switch"><input type="checkbox" id="naiDyn" onchange="saveNaiConfig()"><span class="toggle-slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <div class="collapsible-panel" id="panel_prompts">
+      <div class="img-gen-section-title">
+        <span>📝 正负面提示词编辑与生成</span>
+        <button class="small-btn" onclick="toggleImgTopSection('prompts')">收起 ▲</button>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <label class="form-label" style="margin:0;">正向提示词 (Positive Prompt & Artist Tags)</label>
+        <button class="small-btn" onclick="copyText(document.getElementById('naiPosInput').value)">复制正向词</button>
+      </div>
+      <textarea class="img-prompt-input" id="naiPosInput" placeholder="1girl, solo, artist:..., masterpiece, best quality"></textarea>
+
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+        <label class="form-label" style="margin:0;">负面提示词 (Undesired Content / Negative Prompt)</label>
+        <button class="small-btn" onclick="copyText(document.getElementById('naiNegInput').value)">复制负面词</button>
+      </div>
+      <textarea class="img-prompt-input" id="naiNegInput" placeholder="lowres, bad anatomy, bad hands, text, error, missing fingers..."></textarea>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <button class="btn btn-accent3" onclick="doNaiGenerate()" style="padding:9px 24px;font-size:13px;">立即生成图片 (支持排队)</button>
+        <span class="cost-badge" id="costEstimate">预计消耗: 0 Anlas (Opus 免费步数内或按分辨率计费)</span>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius2);padding:8px 14px;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+      <span style="font-size:12px;color:var(--text2);" id="queueInlineHint">💡 点击上方三个横向选项卡可展开修改 API、模型尺寸或提示词（支持多次点击排队连续生图）</span>
+      <button class="btn btn-accent3" onclick="doNaiGenerate()" style="padding:6px 18px;">🎨 立即生成最新图片</button>
+    </div>
+
+    <div class="img-gen-section">
+      <div class="img-gen-section-title">
+        <span>🖼 当前最新生成结果 (左下角直接下载，右下角删除将同步删除本地历史记录)</span>
+        <button class="small-btn" onclick="deleteCurrentLatestAndLocal()" style="color:var(--danger);border-color:var(--danger);">🗑 删除当前及本地记录</button>
+      </div>
+      <div class="loading-indicator" id="imgLoading"><p id="imgLoadingText">正在请求 NovelAI 生成图片...</p></div>
+      <div class="latest-img-container" id="imgResultsGrid"></div>
+      <div class="empty-state" id="imgEmpty">本次最新生成的图片将单独显示在此处</div>
+    </div>
+
+    <div class="img-gen-section">
+      <div class="img-gen-section-title">
+        <span>💾 本地生图历史记录 (<span id="savedCountDisp">0</span> 张 · 左下角⬇直接下载，点击小图查看/复制词条)</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <button class="small-btn" id="batchSelectModeBtn" onclick="toggleBatchSelectMode()">☑ 批量管理</button>
+          <button class="small-btn" id="batchSelectAllBtn" style="display:none;" onclick="toggleBatchSelectAll()">全选</button>
+          <button class="small-btn" id="batchDeleteExecBtn" style="display:none;color:var(--danger);border-color:var(--danger);" onclick="deleteSelectedBatchImages()">删除所选 (0)</button>
+          <button class="small-btn" style="color:var(--danger);border-color:var(--danger);" onclick="clearAllSavedImages()">清空全部历史</button>
+        </div>
+      </div>
+      <div class="saved-history-small-grid" id="savedImgHistoryGrid"></div>
+      <div class="empty-state" id="savedImgEmpty">暂无本地保存的生图记录</div>
+    </div>
+  </div>
+</div>
+
+<div class="copy-toast" id="copyToast">✓ 已复制到剪贴板</div>
+
+<!-- 图片详情弹窗 -->
+<div class="modal-overlay" id="imgDetailModal" onclick="if(event.target===this)closeImgDetailModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">图片生成数据详情 (点击词框或按钮即可直接复制)</div>
+      <button class="modal-close" onclick="closeImgDetailModal()">✕</button>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-img-box checkerboard-bg">
+        <img id="detailModalImg" src="" alt="Generated Image">
+      </div>
+      <div class="detail-info-box">
+        <div class="detail-meta-tags" id="detailModalMeta"></div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span class="form-label" style="margin:0;">正向提示词 (点击下方文本框或按钮直接复制)</span>
+            <button class="small-btn" onclick="copyDetailPos()">📋 复制正向词</button>
+          </div>
+          <div class="detail-code" id="detailModalPos" onclick="copyDetailPos()" title="点击直接复制正向提示词"></div>
+        </div>
+        <div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span class="form-label" style="margin:0;">负面提示词 (点击下方文本框或按钮直接复制)</span>
+            <button class="small-btn" onclick="copyDetailNeg()">📋 复制负面词</button>
+          </div>
+          <div class="detail-code" id="detailModalNeg" onclick="copyDetailNeg()" title="点击直接复制负面提示词"></div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:auto;padding-top:8px;">
+          <button class="btn btn-primary" onclick="applyDetailToInputs()">填入当前生图框</button>
+          <button class="btn btn-secondary" onclick="saveDetailToStylePreset()">✨ 保留此风格到预设</button>
+          <button class="btn btn-secondary" onclick="downloadDetailImage()">下载原图 PNG</button>
+          <button class="btn btn-danger" id="detailModalDelBtn" onclick="deleteDetailImage()">删除此记录</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- LLM API 设置与酒馆预设导入管理弹窗 -->
+<div class="modal-overlay" id="settingsModal" onclick="if(event.target===this)closeSettings()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">LLM 提示词生成 API 设置 & 酒馆预设导入</div>
+      <button class="modal-close" onclick="closeSettings()">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">节点名称</label><input class="form-input" id="apiName" type="text" placeholder="OpenAI / Claude"></div>
+      <div class="form-group"><label class="form-label">Base URL</label><input class="form-input" id="apiUrl" type="text" placeholder="https://api.openai.com/v1"></div>
+    </div>
+    <div class="form-group"><label class="form-label">API Key</label><input class="form-input" id="apiKey" type="text" placeholder="sk-..."></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;">
+      <button class="btn btn-primary" onclick="saveApiKey()">保存节点</button>
+      <button class="btn btn-secondary" onclick="connectApi()">连接并获取模型</button>
+    </div>
+    <div id="apiKeysList" style="margin-bottom:12px;"></div>
+    <div class="form-group" id="modelSelectGroup" style="display:none;">
+      <label class="form-label">选择模型</label>
+      <select class="model-select" id="modelSelect" onchange="state.selectedModel=this.value;saveState();updateConnectionStatus();"></select>
+    </div>
+
+    <div class="st-preset-section">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:14px;font-weight:700;color:var(--accent2);">🍺 酒馆预设 (SillyTavern Preset)</span>
+          <label class="toggle-switch" title="酒馆预设总开关">
+            <input type="checkbox" id="stPresetMasterSwitch" onchange="toggleStPresetMaster(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:11px;color:var(--text3);" id="stPresetNameLabel">未导入</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <input type="file" id="stPresetFileInput" accept=".json,application/json" style="display:none;" onchange="handleStPresetFile(event)">
+          <label for="stPresetFileInput" class="small-btn" style="border-color:var(--accent);color:var(--accent2);display:inline-block;">📂 导入酒馆预设 (.json)</label>
+          <button class="small-btn" onclick="addStPresetItem()">+ 新增条目</button>
+          <button class="small-btn" style="color:var(--danger);border-color:var(--danger);" onclick="clearStPreset()">清空预设</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">
+        支持直接导入酒馆 Chat Completion 预设 JSON（自动解析 prompts 与 prompt_order 顺序及开关），可整体开关，也可对每条单独开关、点击编辑或删除。
+      </div>
+      <div class="st-preset-list" id="stPresetList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑单个酒馆预设条目弹窗 -->
+<div class="modal-overlay" id="editStItemModal" onclick="if(event.target===this)closeEditStItemModal()">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title">编辑酒馆预设条目</div>
+      <button class="modal-close" onclick="closeEditStItemModal()">✕</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group" style="flex:2;">
+        <label class="form-label">条目名称 (Name)</label>
+        <input class="form-input" id="stItemNameInput" type="text">
+      </div>
+      <div class="form-group" style="flex:1;">
+        <label class="form-label">角色 (Role)</label>
+        <select class="model-select" id="stItemRoleSelect">
+          <option value="system">system</option>
+          <option value="user">user</option>
+          <option value="assistant">assistant</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">条目内容 (Content)</label>
+      <textarea class="form-input" id="stItemContentInput" rows="7" style="font-family:monospace;line-height:1.5;"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button class="btn btn-danger" onclick="deleteCurrentStItem()">删除此条目</button>
+      <button class="btn btn-primary" onclick="saveCurrentStItem()">保存修改</button>
+    </div>
+  </div>
+</div>
+
+<!-- 提示词历史弹窗 -->
+<div class="modal-overlay" id="historyModal" onclick="if(event.target===this)closeHistory()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">提示词生成历史记录</div>
+      <button class="modal-close" onclick="closeHistory()">✕</button>
+    </div>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<!-- 编辑画师串/思考预设弹窗 -->
+<div class="modal-overlay" id="editPvalModal" onclick="if(event.target===this)closeEditPval()">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-header">
+      <div class="modal-title" id="editPvalTitle">编辑预设</div>
+      <button class="modal-close" onclick="closeEditPval()">✕</button>
+    </div>
+    <div class="form-group"><label class="form-label">名称</label><input class="form-input" id="editPvalName" type="text"></div>
+    <div class="form-group"><label class="form-label" id="editPvalContentLabel">正向画师串 / 风格模板内容</label><textarea class="form-input" id="editPvalContent" rows="4"></textarea></div>
+    <div class="form-group" id="editPvalNegGroup" style="display:none;">
+      <label class="form-label">关联负面提示词 (可选，留空则由AI按需调整)</label>
+      <textarea class="form-input" id="editPvalNeg" rows="3"></textarea>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <button class="btn btn-primary" onclick="saveEditPval()">保存</button>
+      <button class="btn btn-secondary" onclick="deleteEditPval()" style="color:var(--danger);">删除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 保持原有存储键名与 IndexedDB 数据库名完全不变，无缝识别旧数据
+const STORAGE_KEY = 'nai_studio_state_v3';
+const DB_NAME = 'NaiStudioImageDB';
+const DB_STORE = 'images';
+
+const DEFAULT_SIZE_PRESETS = [
+  { label: '竖图 (832×1216)', w: 832, h: 1216, builtin: true },
+  { label: '横图 (1216×832)', w: 1216, h: 832, builtin: true },
+  { label: '方图 (1024×1024)', w: 1024, h: 1024, builtin: true },
+  { label: '竖长屏 (768×1344)', w: 768, h: 1344, builtin: true },
+  { label: '宽屏壁纸 (1344×768)', w: 1344, h: 768, builtin: true },
+  { label: '超宽屏 (1472×704)', w: 1472, h: 704, builtin: true },
+  { label: '大竖图 (1024×1536)', w: 1024, h: 1536, builtin: true },
+  { label: '大横图 (1536×1024)', w: 1536, h: 1024, builtin: true },
+  { label: '小竖图 (512×768)', w: 512, h: 768, builtin: true },
+  { label: '小方图 (640×640)', w: 640, h: 640, builtin: true }
+];
+
+let state = {
+  params: { groupCount: 3 },
+  paramsCollapsed: false,
+  tags: [{text:'masterpiece',selected:false},{text:'best quality',selected:false},{text:'solo',selected:false}],
+  artists: [
+    {name:'唯美厚涂串', content:'artist:wlop, {artist:ask (askzy)}, [artist:ciloranko], year 2023', negative:'', isStyleTemplate:false, active:true}
+  ],
+  thinkPrompts: [],
+  stPreset: {
+    enabled: false,
+    name: '',
+    items: []
+  },
+  sizePresets: DEFAULT_SIZE_PRESETS,
+  apiKeys: [],
+  activeApiIndex: -1,
+  selectedModel: '',
+  models: [],
+  connected: false,
+  imageMode: false,
+  imageDataUrls: [],
+  currentResults: [],
+  lastPrompt: '',
+  history: [],
+  currentPage: 'prompt',
+  nai: {
+    apiKey: '',
+    apiUrl: 'https://image.novelai.net',
+    model: 'nai-diffusion-5-full',
+    sampler: 'k_euler_ancestral',
+    steps: 28,
+    cfg: 5.0,
+    width: 832,
+    height: 1216,
+    transparent: false,
+    transTol: 28,
+    smea: true,
+    dyn: false,
+    anlas: null
+  }
+};
+
+// 内存仅保留轻量元数据与微缩图，避免数百MB高清Base64驻留内存造成删改卡顿
+let sessionImages = [];
+let savedImages = [];
+let currentDetailItem = null;
+let currentDetailSource = '';
+let activeImgTopTab = null;
+
+// 全局复用的 IndexedDB 连接实例
+let dbInstancePromise = null;
+
+// 批量选择模式状态
+let batchSelectMode = false;
+let selectedBatchIds = new Set();
+
+// 生图任务排队队列状态
+let naiGenQueue = [];
+let isProcessingNaiQueue = false;
+
+// 安全保存状态到 localStorage
+function saveState(){
+  try {
+    localStorage.removeItem('nai_studio_state_v1');
+    localStorage.removeItem('nai_studio_state_v2');
+    const stateToPersist = {
+      ...state,
+      imageDataUrls: []
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToPersist));
+  } catch(e){
+    try {
+      if(state.history && state.history.length > 5){
+        state.history.length = 5;
+      }
+      const slimState = {
+        ...state,
+        imageDataUrls: [],
+        history: state.history
+      };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(slimState));
+    } catch(err2){
+      console.warn('localStorage 配额已满，跳过持久化写入:', err2);
+    }
+  }
+}
+
+function loadState(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('nai_studio_state_v2') || localStorage.getItem('nai_studio_state_v1');
+    localStorage.removeItem('nai_studio_state_v1');
+    localStorage.removeItem('nai_studio_state_v2');
+    const s = JSON.parse(raw);
+    if(s){
+      state = {
+        ...state,
+        ...s,
+        imageDataUrls: [],
+        nai: {...state.nai, ...(s.nai||{})},
+        stPreset: s.stPreset ? {...state.stPreset, ...s.stPreset, items: Array.isArray(s.stPreset.items) ? s.stPreset.items : []} : {enabled:false, name:'', items:[]},
+        sizePresets: (s.sizePresets && s.sizePresets.length) ? s.sizePresets : DEFAULT_SIZE_PRESETS
+      };
+      saveState();
+    }
+  } catch(e){}
+}
+
+// ==================== 轻量缩略图生成与按需原图提取 ====================
+function generateThumbDataUrl(dataUrl, maxDim = 220){
+  return new Promise((resolve) => {
+    if(!dataUrl) return resolve('');
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if(w > maxDim || h > maxDim){
+        if(w >= h){ h = Math.max(1, Math.round(h * (maxDim / w))); w = maxDim; }
+        else { w = Math.max(1, Math.round(w * (maxDim / h))); h = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/webp', 0.78));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function toLightMemoryRecord(item){
+  const { dataUrl, ...rest } = item;
+  return {
+    ...rest,
+    thumbUrl: item.thumbUrl || dataUrl || ''
+  };
+}
+
+// ==================== 通用单图直接下载函数（按需从DB读取高清原图） ====================
+function triggerImageDownload(dataUrl, filename){
+  if(!dataUrl) return;
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename || `NAI_${Date.now()}.png`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  showToast('⬇ 已开始下载图片');
+}
+
+async function downloadImageById(id){
+  const sessionItem = sessionImages.find(x => x.id === id);
+  if(sessionItem && sessionItem.dataUrl){
+    triggerImageDownload(sessionItem.dataUrl, `NAI_${sessionItem.seed || sessionItem.id}.png`);
+    return;
+  }
+  const dbRecord = await getFullRecordFromDB(id);
+  if(dbRecord && dbRecord.dataUrl){
+    triggerImageDownload(dbRecord.dataUrl, `NAI_${dbRecord.seed || dbRecord.id}.png`);
+    return;
+  }
+  const fallback = savedImages.find(x => x.id === id);
+  if(fallback && (fallback.dataUrl || fallback.thumbUrl)){
+    triggerImageDownload(fallback.dataUrl || fallback.thumbUrl, `NAI_${fallback.seed || fallback.id}.png`);
+  }
+}
+
+// ==================== 生图页面顶部横向并列折叠控制 ====================
+function toggleImgTopSection(sectionKey){
+  const keys = ['api', 'params', 'prompts'];
+  activeImgTopTab = (activeImgTopTab === sectionKey) ? null : sectionKey;
+  keys.forEach(k => {
+    const btn = document.getElementById('tabBtn_' + k);
+    const panel = document.getElementById('panel_' + k);
+    if(btn) btn.classList.toggle('active', activeImgTopTab === k);
+    if(panel) panel.classList.toggle('open', activeImgTopTab === k);
+  });
+}
+
+// ==================== 酒馆 (SillyTavern) 预设导入、解析与管理 ====================
+function toggleStPresetMaster(checked){
+  state.stPreset.enabled = !!checked;
+  saveState();
+  updateConnectionStatus();
+}
+
+function handleStPresetFile(ev){
+  const file = ev.target.files?.[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const json = JSON.parse(e.target.result);
+      const parsedItems = parseSillyTavernPreset(json);
+      if(!parsedItems.length){
+        alert('未在该 JSON 文件中解析到有效的提示词条目，请确认是否为酒馆预设格式。');
+        return;
+      }
+      state.stPreset.name = file.name.replace(/\.json$/i, '');
+      state.stPreset.items = parsedItems;
+      state.stPreset.enabled = true;
+      saveState();
+      renderStPresetUI();
+      updateConnectionStatus();
+      showToast(`🍺 已导入酒馆预设「${state.stPreset.name}」(${parsedItems.length} 条目)`);
+    } catch(err){
+      alert('解析酒馆预设 JSON 失败: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  ev.target.value = '';
+}
+
+function parseSillyTavernPreset(json){
+  const result = [];
+  if(Array.isArray(json.prompts)){
+    const promptMap = {};
+    json.prompts.forEach(p => {
+      if(p && p.identifier) promptMap[p.identifier] = p;
+    });
+
+    let orderList = null;
+    if(Array.isArray(json.prompt_order) && json.prompt_order.length > 0){
+      const charOrder = json.prompt_order.find(o => o.character_id === 100001) || json.prompt_order[json.prompt_order.length - 1];
+      if(charOrder && Array.isArray(charOrder.order)){
+        orderList = charOrder.order;
+      }
+    }
+
+    const usedIds = new Set();
+    if(orderList){
+      orderList.forEach(o => {
+        const p = promptMap[o.identifier];
+        if(p){
+          usedIds.add(o.identifier);
+          if(p.marker && (!p.content || !String(p.content).trim())) return;
+          result.push({
+            id: p.identifier || ('st_' + Math.random().toString(36).slice(2,8)),
+            name: p.name || p.identifier || '未命名条目',
+            role: p.role || 'system',
+            content: typeof p.content === 'string' ? p.content : '',
+            enabled: o.enabled !== undefined ? !!o.enabled : (p.enabled !== false)
+          });
+        }
+      });
+    }
+
+    json.prompts.forEach(p => {
+      if(!p) return;
+      if(p.identifier && usedIds.has(p.identifier)) return;
+      if(p.marker && (!p.content || !String(p.content).trim())) return;
+      result.push({
+        id: p.identifier || ('st_' + Math.random().toString(36).slice(2,8)),
+        name: p.name || p.identifier || '未命名条目',
+        role: p.role || 'system',
+        content: typeof p.content === 'string' ? p.content : '',
+        enabled: p.enabled !== undefined ? !!p.enabled : true
+      });
+    });
+  } else if(Array.isArray(json)){
+    json.forEach((p, idx) => {
+      if(!p) return;
+      result.push({
+        id: p.id || p.identifier || ('item_' + idx),
+        name: p.name || p.comment || `条目 #${idx+1}`,
+        role: p.role || 'system',
+        content: p.content || p.prompt || '',
+        enabled: p.enabled !== undefined ? !!p.enabled : true
+      });
+    });
+  } else if(typeof json === 'object' && json !== null){
+    ['system_prompt', 'main_prompt', 'nsfw_prompt', 'jailbreak_prompt', 'post_history_instructions'].forEach(k => {
+      if(typeof json[k] === 'string' && json[k].trim()){
+        result.push({
+          id: k,
+          name: k,
+          role: 'system',
+          content: json[k],
+          enabled: true
+        });
+      }
+    });
+  }
+  return result;
+}
+
+function renderStPresetUI(){
+  const masterSwitch = document.getElementById('stPresetMasterSwitch');
+  const nameLabel = document.getElementById('stPresetNameLabel');
+  const listEl = document.getElementById('stPresetList');
+  if(!masterSwitch || !listEl) return;
+
+  masterSwitch.checked = !!state.stPreset.enabled;
+  const activeCount = state.stPreset.items.filter(x => x.enabled).length;
+  nameLabel.textContent = state.stPreset.items.length
+    ? `${state.stPreset.name || '自定义预设'} (已启用 ${activeCount}/${state.stPreset.items.length})`
+    : '未导入预设';
+
+  listEl.innerHTML = '';
+  if(!state.stPreset.items.length){
+    listEl.innerHTML = '<div style="text-align:center;padding:14px;color:var(--text3);font-size:11px;">暂无酒馆预设条目，请点击上方「📂 导入酒馆预设 (.json)」或「+ 新增条目」</div>';
+    return;
+  }
+
+  state.stPreset.items.forEach((item, idx) => {
+    const row = document.createElement('div');
+    row.className = 'st-preset-item' + (item.enabled ? '' : ' disabled');
+    row.innerHTML = `
+      <label class="toggle-switch" onclick="event.stopPropagation()" title="单独启用/禁用此条目">
+        <input type="checkbox" ${item.enabled ? 'checked' : ''} onchange="toggleStPresetItem(${idx}, this.checked)">
+        <span class="toggle-slider"></span>
+      </label>
+      <div class="st-preset-info" onclick="openEditStItemModal(${idx})" title="点击编辑此条目内容">
+        <div class="st-preset-name">
+          <span>${escapeHtml(item.name)}</span>
+          <span class="st-role-badge">${escapeHtml(item.role || 'system')}</span>
+        </div>
+        <div class="st-preset-preview">${escapeHtml(item.content || '(空内容)')}</div>
+      </div>
+      <div style="display:flex;gap:4px;white-space:nowrap;">
+        <button class="small-btn" onclick="openEditStItemModal(${idx})">编辑</button>
+        <button class="small-btn" style="color:var(--danger);" onclick="deleteStPresetItem(${idx})">删除</button>
+      </div>
+    `;
+    listEl.appendChild(row);
+  });
+}
+
+function toggleStPresetItem(idx, checked){
+  if(state.stPreset.items[idx]){
+    state.stPreset.items[idx].enabled = !!checked;
+    saveState();
+    renderStPresetUI();
+    updateConnectionStatus();
+  }
+}
+
+function deleteStPresetItem(idx){
+  state.stPreset.items.splice(idx, 1);
+  saveState();
+  renderStPresetUI();
+  updateConnectionStatus();
+}
+
+function clearStPreset(){
+  if(!state.stPreset.items.length) return;
+  if(!confirm('确定要清空当前导入的酒馆预设及其所有条目吗？')) return;
+  state.stPreset = { enabled: false, name: '', items: [] };
+  saveState();
+  renderStPresetUI();
+  updateConnectionStatus();
+}
+
+let editingStItemIdx = -1;
+function addStPresetItem(){
+  state.stPreset.items.push({
+    id: 'custom_' + Date.now(),
+    name: '新预设条目 #' + (state.stPreset.items.length + 1),
+    role: 'system',
+    content: '',
+    enabled: true
+  });
+  if(!state.stPreset.name) state.stPreset.name = '自定义预设';
+  state.stPreset.enabled = true;
+  saveState();
+  renderStPresetUI();
+  updateConnectionStatus();
+  openEditStItemModal(state.stPreset.items.length - 1);
+}
+
+function openEditStItemModal(idx){
+  const item = state.stPreset.items[idx];
+  if(!item) return;
+  editingStItemIdx = idx;
+  document.getElementById('stItemNameInput').value = item.name || '';
+  document.getElementById('stItemRoleSelect').value = item.role || 'system';
+  document.getElementById('stItemContentInput').value = item.content || '';
+  document.getElementById('editStItemModal').classList.add('show');
+}
+
+function closeEditStItemModal(){
+  document.getElementById('editStItemModal').classList.remove('show');
+  editingStItemIdx = -1;
+}
+
+function saveCurrentStItem(){
+  if(editingStItemIdx < 0 || !state.stPreset.items[editingStItemIdx]) return;
+  state.stPreset.items[editingStItemIdx].name = document.getElementById('stItemNameInput').value.trim() || '未命名条目';
+  state.stPreset.items[editingStItemIdx].role = document.getElementById('stItemRoleSelect').value || 'system';
+  state.stPreset.items[editingStItemIdx].content = document.getElementById('stItemContentInput').value;
+  saveState();
+  renderStPresetUI();
+  closeEditStItemModal();
+  showToast('✓ 预设条目已保存');
+}
+
+function deleteCurrentStItem(){
+  if(editingStItemIdx < 0) return;
+  state.stPreset.items.splice(editingStItemIdx, 1);
+  saveState();
+  renderStPresetUI();
+  updateConnectionStatus();
+  closeEditStItemModal();
+}
+
+// ==================== 剪贴板复制函数 ====================
+function copyText(text, customMsg){
+  if(!text){
+    showToast('⚠ 内容为空，无法复制');
+    return;
+  }
+  const onSuccess = () => showToast(customMsg || '✓ 已复制到剪贴板');
+
+  if(navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(text).then(onSuccess).catch(() => fallbackCopyText(text, onSuccess));
+  } else {
+    fallbackCopyText(text, onSuccess);
+  }
+}
+
+function fallbackCopyText(text, callback){
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-9999px';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if(ok) callback();
+    else showToast('⚠ 复制受限，请手动长按选中复制');
+  } catch(e){
+    showToast('⚠ 复制失败: ' + e.message);
+  }
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const toast = document.getElementById('copyToast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  if(toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+}
+
+// ==================== IndexedDB 高性能持久化生图记录 & 零重绘增删管理 ====================
+function openImageDB(){
+  if(dbInstancePromise) return dbInstancePromise;
+  dbInstancePromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if(!db.objectStoreNames.contains(DB_STORE)){
+        db.createObjectStore(DB_STORE, { keyPath: 'id' });
+      }
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      db.onclose = () => { dbInstancePromise = null; };
+      resolve(db);
+    };
+    req.onerror = () => {
+      dbInstancePromise = null;
+      reject(req.error);
+    };
+  });
+  return dbInstancePromise;
+}
+
+async function getFullRecordFromDB(id){
+  if(!id) return null;
+  try {
+    const db = await openImageDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const req = tx.objectStore(DB_STORE).get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch(e){
+    return null;
+  }
+}
+
+// 使用游标流式读取，内存仅保存轻量元数据+微缩图，后台静默为旧大图补齐微缩图
+async function loadSavedImagesFromDB(){
+  try {
+    const db = await openImageDB();
+    const lightList = [];
+    const needThumbBackfill = [];
+
+    await new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, 'readonly');
+      const store = tx.objectStore(DB_STORE);
+      const req = store.openCursor();
+      req.onsuccess = (e) => {
+        const cursor = e.target.result;
+        if(cursor){
+          const val = cursor.value;
+          if(!val.thumbUrl && val.dataUrl){
+            needThumbBackfill.push(val.id);
+          }
+          lightList.push(toLightMemoryRecord(val));
+          cursor.continue();
+        } else {
+          resolve();
+        }
+      };
+      req.onerror = () => resolve();
+    });
+
+    savedImages = lightList.sort((a,b) => b.timestamp - a.timestamp);
+    renderSavedImages();
+
+    // 后台非阻塞为旧记录生成轻量缩略图，避免下次加载大图卡顿
+    if(needThumbBackfill.length > 0){
+      backfillLegacyThumbnails(needThumbBackfill);
+    }
+    return savedImages;
+  } catch(e){
+    return [];
+  }
+}
+
+async function backfillLegacyThumbnails(ids){
+  for(const id of ids){
+    try {
+      const fullRec = await getFullRecordFromDB(id);
+      if(!fullRec || fullRec.thumbUrl || !fullRec.dataUrl) continue;
+      const thumbUrl = await generateThumbDataUrl(fullRec.dataUrl, 220);
+      fullRec.thumbUrl = thumbUrl;
+      const db = await openImageDB();
+      await new Promise((r) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).put(fullRec);
+        tx.oncomplete = () => r();
+        tx.onerror = () => r();
+      });
+      const memItem = savedImages.find(x => x.id === id);
+      if(memItem){
+        memItem.thumbUrl = thumbUrl;
+        const cardImg = document.querySelector(`.small-history-card[data-img-id="${id}"] img`);
+        if(cardImg) cardImg.src = thumbUrl;
+      }
+      await new Promise(r => setTimeout(r, 16));
+    } catch(e){}
+  }
+}
+
+async function saveImageToDB(item, silent = false){
+  if(!item) return;
+  try {
+    if(!item.thumbUrl && item.dataUrl){
+      item.thumbUrl = await generateThumbDataUrl(item.dataUrl, 220);
+    }
+    const db = await openImageDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).put(item);
+      tx.oncomplete = () => {
+        const lightItem = toLightMemoryRecord(item);
+        const idx = savedImages.findIndex(x => x.id === item.id);
+        if(idx >= 0){
+          savedImages[idx] = lightItem;
+          renderSavedImages();
+        } else {
+          savedImages.unshift(lightItem);
+          prependSingleSavedCardDOM(lightItem);
+        }
+        renderSessionImages();
+        if(!silent) showToast('💾 已保存至本地记录');
+        resolve(true);
+      };
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch(e){ console.error('保存本地记录失败:', e); }
+}
+
+// 精准移除单个/多个 DOM 卡片节点，不触发全列表重绘
+function removeSavedCardsFromDOM(idsArray){
+  const grid = document.getElementById('savedImgHistoryGrid');
+  const empty = document.getElementById('savedImgEmpty');
+  const countDisp = document.getElementById('savedCountDisp');
+  if(grid && idsArray && idsArray.length){
+    idsArray.forEach(id => {
+      const el = grid.querySelector(`.small-history-card[data-img-id="${id}"]`);
+      if(el) el.remove();
+    });
+  }
+  if(countDisp) countDisp.textContent = savedImages.length;
+  if(empty) empty.style.display = savedImages.length ? 'none' : 'block';
+}
+
+async function deleteImageFromDB(id){
+  if(!id) return;
+  // 先乐观更新 UI 保证零延迟丝滑响应
+  savedImages = savedImages.filter(x => x.id !== id);
+  selectedBatchIds.delete(id);
+  removeSavedCardsFromDOM([id]);
+  updateBatchUIButtons();
+
+  try {
+    const db = await openImageDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      tx.objectStore(DB_STORE).delete(id);
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch(e){}
+}
+
+async function deleteMultipleImagesFromDB(idsArray){
+  if(!idsArray || !idsArray.length) return;
+  const idSet = new Set(idsArray);
+  savedImages = savedImages.filter(x => !idSet.has(x.id));
+  sessionImages = sessionImages.filter(x => !idSet.has(x.id));
+  idsArray.forEach(id => selectedBatchIds.delete(id));
+
+  // 瞬间移除被删节点的 DOM，不重新渲染剩余图片
+  removeSavedCardsFromDOM(idsArray);
+  renderSessionImages();
+  updateBatchUIButtons();
+
+  try {
+    const db = await openImageDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction(DB_STORE, 'readwrite');
+      const store = tx.objectStore(DB_STORE);
+      idsArray.forEach(id => store.delete(id));
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch(e){}
+}
+
+// 批量选择模式切换与操作（仅切换 CSS Class，零 DOM 重建）
+function toggleBatchSelectMode(){
+  batchSelectMode = !batchSelectMode;
+  const grid = document.getElementById('savedImgHistoryGrid');
+  if(grid) grid.classList.toggle('batch-mode', batchSelectMode);
+
+  if(!batchSelectMode){
+    selectedBatchIds.clear();
+    if(grid){
+      grid.querySelectorAll('.small-history-card.batch-selected').forEach(card => {
+        card.classList.remove('batch-selected');
+        const badge = card.querySelector('.batch-check-badge');
+        if(badge) badge.textContent = '';
+      });
+    }
+  }
+  updateBatchUIButtons();
+}
+
+function updateBatchUIButtons(){
+  const modeBtn = document.getElementById('batchSelectModeBtn');
+  const allBtn = document.getElementById('batchSelectAllBtn');
+  const delBtn = document.getElementById('batchDeleteExecBtn');
+  if(!modeBtn) return;
+
+  modeBtn.classList.toggle('active-mode', batchSelectMode);
+  modeBtn.textContent = batchSelectMode ? '✕ 退出批量' : '☑ 批量管理';
+  allBtn.style.display = batchSelectMode ? 'inline-block' : 'none';
+  delBtn.style.display = batchSelectMode ? 'inline-block' : 'none';
+  delBtn.textContent = `删除所选 (${selectedBatchIds.size})`;
+  if(savedImages.length > 0 && selectedBatchIds.size === savedImages.length){
+    allBtn.textContent = '取消全选';
+  } else {
+    allBtn.textContent = '全选';
+  }
+}
+
+function toggleBatchSelectAll(){
+  const grid = document.getElementById('savedImgHistoryGrid');
+  const selectAll = !(savedImages.length > 0 && selectedBatchIds.size === savedImages.length);
+  selectedBatchIds.clear();
+  if(selectAll){
+    savedImages.forEach(item => selectedBatchIds.add(item.id));
+  }
+  if(grid){
+    grid.querySelectorAll('.small-history-card').forEach(card => {
+      card.classList.toggle('batch-selected', selectAll);
+      const badge = card.querySelector('.batch-check-badge');
+      if(badge) badge.textContent = selectAll ? '✓' : '';
+    });
+  }
+  updateBatchUIButtons();
+}
+
+async function deleteSelectedBatchImages(){
+  if(selectedBatchIds.size === 0){
+    showToast('⚠ 请先点击小图勾选要删除的记录');
+    return;
+  }
+  const count = selectedBatchIds.size;
+  if(!confirm(`确定要批量删除所选的 ${count} 张本地图片记录吗？`)) return;
+  const ids = Array.from(selectedBatchIds);
+  await deleteMultipleImagesFromDB(ids);
+  showToast(`🗑 已批量删除 ${count} 张本地记录`);
+}
+
+async function clearAllSavedImages(){
+  if(!confirm('确定要清空所有保存在浏览器本地的生图历史记录吗？')) return;
+  savedImages = [];
+  selectedBatchIds.clear();
+  const grid = document.getElementById('savedImgHistoryGrid');
+  if(grid) grid.replaceChildren();
+  const countDisp = document.getElementById('savedCountDisp');
+  if(countDisp) countDisp.textContent = '0';
+  const empty = document.getElementById('savedImgEmpty');
+  if(empty) empty.style.display = 'block';
+  updateBatchUIButtons();
+  renderSessionImages();
+
+  try {
+    const db = await openImageDB();
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    tx.objectStore(DB_STORE).clear();
+    tx.oncomplete = () => showToast('🗑 已清空全部本地历史记录');
+  } catch(e){}
+}
+
+// ==================== 透明底算法 ====================
+async function makeImageTransparent(dataUrl, tolerance = 28){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const w = canvas.width = img.width;
+      const h = canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      const imgData = ctx.getImageData(0, 0, w, h);
+      const data = imgData.data;
+
+      const corners = [0, (w - 1) * 4, (h - 1) * w * 4, ((h - 1) * w + (w - 1)) * 4];
+      let br = 0, bg = 0, bb = 0;
+      corners.forEach(idx => { br += data[idx]; bg += data[idx+1]; bb += data[idx+2]; });
+      br = Math.round(br / 4); bg = Math.round(bg / 4); bb = Math.round(bb / 4);
+
+      const visited = new Uint8Array(w * h);
+      const queue = new Int32Array(w * h);
+      let head = 0, tail = 0;
+
+      const colorDist = (idx) => {
+        const dr = data[idx] - br, dg = data[idx+1] - bg, db = data[idx+2] - bb;
+        return Math.sqrt(dr*dr + dg*dg + db*db);
+      };
+
+      const pushEdge = (x, y) => {
+        const p = y * w + x;
+        if(!visited[p] && colorDist(p * 4) <= tolerance * 1.6){
+          visited[p] = 1;
+          queue[tail++] = p;
+        }
+      };
+
+      for(let x = 0; x < w; x++){ pushEdge(x, 0); pushEdge(x, h - 1); }
+      for(let y = 0; y < h; y++){ pushEdge(0, y); pushEdge(w - 1, y); }
+
+      while(head < tail){
+        const p = queue[head++];
+        const idx = p * 4;
+        const dist = colorDist(idx);
+        if(dist <= tolerance){
+          data[idx + 3] = 0;
+        } else {
+          const alphaRatio = (dist - tolerance) / (tolerance * 0.6);
+          data[idx + 3] = Math.min(255, Math.max(0, Math.round(alphaRatio * 255)));
+        }
+        const x = p % w, y = (p - x) / w;
+        if(x > 0) pushEdge(x - 1, y);
+        if(x < w - 1) pushEdge(x + 1, y);
+        if(y > 0) pushEdge(x, y - 1);
+        if(y < h - 1) pushEdge(x, y + 1);
+      }
+
+      ctx.putImageData(imgData, 0, 0);
+      resolve(canvas.toDataURL('image/png'));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
+function updateScrollPadding(){
+  const h = document.getElementById('fixedTop').offsetHeight;
+  document.getElementById('scrollContent').style.paddingTop = (h + 12) + 'px';
+}
+
+function toggleParamsCollapse(){
+  state.paramsCollapsed = !state.paramsCollapsed;
+  document.getElementById('paramsBar').classList.toggle('collapsed', state.paramsCollapsed);
+  document.getElementById('collapseBtn').classList.toggle('collapsed', state.paramsCollapsed);
+  saveState(); setTimeout(updateScrollPadding, 320);
+}
+
+function saveParams(){
+  state.params.groupCount = parseInt(document.getElementById('groupCount').value) || 3;
+  saveState();
+}
+
+// ==================== 画师串与保留风格预设管理 ====================
+function renderArtists(){
+  const area = document.getElementById('artistArea'); area.innerHTML = '';
+  state.artists.forEach((a, i) => {
+    const el = document.createElement('span');
+    el.className = 'pval-item' + (a.isStyleTemplate ? ' style-preset' : '') + (a.active ? ' active' : '');
+    const badge = a.isStyleTemplate ? '✨' : '🎨';
+    el.innerHTML = `${badge}${escapeHtml(a.name)}<span class="pval-edit" onclick="event.stopPropagation();openEditPval('artist',${i})" title="编辑预设">✎</span>`;
+    el.title = a.isStyleTemplate
+      ? `【风格保留预设】点击启用/关闭\n启用后将保留此画师串与氛围，按新要求替换角色描述，并参考其负面词`
+      : `【画师串预设】${a.content}`;
+    el.onclick = () => { a.active = !a.active; saveState(); renderArtists(); };
+    area.appendChild(el);
+  });
+}
+
+function addArtistPrompt(){
+  const name = prompt('请输入画师串预设名称：'); if(!name) return;
+  const content = prompt('请输入画师串或风格词内容 (如 artist:xxx, {artist:yyy})：'); if(content===null) return;
+  state.artists.push({name:name.trim(), content:content.trim(), negative:'', isStyleTemplate:false, active:true});
+  saveState(); renderArtists();
+}
+
+function saveCardStyleToPreset(idx){
+  const r = state.currentResults[idx];
+  if(!r) return;
+  const name = prompt('将此条提示词的【画师串与风格架构】保存到画师串预设，请起个名字：', `保留风格_${state.artists.length + 1}`);
+  if(!name || !name.trim()) return;
+  state.artists.push({
+    name: name.trim(),
+    content: r.prompt,
+    negative: r.negative || '',
+    isStyleTemplate: true,
+    active: true
+  });
+  saveState();
+  renderArtists();
+  updateScrollPadding();
+  showToast(`✨ 已保存风格「${name.trim()}」并自动勾选启用！后续生成将保留此串与画风`);
+}
+
+function renderThinkPrompts(){
+  const area = document.getElementById('thinkArea'); area.innerHTML = '';
+  state.thinkPrompts.forEach((t, i) => {
+    const el = document.createElement('span');
+    el.className = 'pval-item' + (t.active ? ' active' : '');
+    el.innerHTML = `${escapeHtml(t.name)}<span class="pval-edit" onclick="event.stopPropagation();openEditPval('think',${i})">✎</span>`;
+    el.onclick = () => { t.active = !t.active; saveState(); renderThinkPrompts(); };
+    area.appendChild(el);
+  });
+}
+function addThinkPrompt(){
+  const name = prompt('思考预提示名称：'); if(!name) return;
+  const content = prompt('思考规则内容（AI将在生成前预读取）：'); if(content===null) return;
+  state.thinkPrompts.push({name:name.trim(), content:content.trim(), active:true});
+  saveState(); renderThinkPrompts();
+}
+
+let editType = '', editIdx = -1;
+function openEditPval(type, idx){
+  editType = type; editIdx = idx;
+  const item = type === 'artist' ? state.artists[idx] : state.thinkPrompts[idx];
+  document.getElementById('editPvalTitle').textContent = type === 'artist' ? '编辑画师串 / 保留风格预设' : '编辑思考预提示';
+  document.getElementById('editPvalName').value = item.name || '';
+  document.getElementById('editPvalContent').value = item.content || '';
+  if(type === 'artist'){
+    document.getElementById('editPvalNegGroup').style.display = 'block';
+    document.getElementById('editPvalNeg').value = item.negative || '';
+  } else {
+    document.getElementById('editPvalNegGroup').style.display = 'none';
+  }
+  document.getElementById('editPvalModal').classList.add('show');
+}
+function closeEditPval(){ document.getElementById('editPvalModal').classList.remove('show'); }
+function saveEditPval(){
+  const arr = editType === 'artist' ? state.artists : state.thinkPrompts;
+  if(arr[editIdx]){
+    arr[editIdx].name = document.getElementById('editPvalName').value.trim();
+    arr[editIdx].content = document.getElementById('editPvalContent').value.trim();
+    if(editType === 'artist'){
+      arr[editIdx].negative = document.getElementById('editPvalNeg').value.trim();
+    }
+  }
+  saveState(); renderArtists(); renderThinkPrompts(); closeEditPval();
+}
+function deleteEditPval(){
+  const arr = editType === 'artist' ? state.artists : state.thinkPrompts;
+  arr.splice(editIdx, 1);
+  saveState(); renderArtists(); renderThinkPrompts(); closeEditPval();
+}
+
+// ==================== 快捷标签 ====================
+let tagEditMode = false;
+function toggleTagEditMode(){
+  tagEditMode = !tagEditMode;
+  document.getElementById('editTagsBtn').classList.toggle('active', tagEditMode);
+  document.getElementById('editTagsBtn').textContent = tagEditMode ? '完成' : '编辑';
+  renderTags();
+}
+function renderTags(){
+  const area = document.getElementById('tagsArea'); area.innerHTML = '';
+  area.classList.toggle('edit-mode', tagEditMode);
+  state.tags.forEach((tag, i) => {
+    const el = document.createElement('button');
+    el.className = 'tag' + (tag.selected ? ' selected' : '');
+    el.innerHTML = `<span>${escapeHtml(tag.text)}</span><span class="remove-tag" onclick="event.stopPropagation();removeTag(${i})">✕</span>`;
+    el.onclick = () => { tag.selected = !tag.selected; saveState(); renderTags(); updateInputFromTags(); };
+    area.appendChild(el);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-tag-btn'; addBtn.textContent = '+';
+  addBtn.onclick = () => {
+    const t = prompt('输入快捷 Tag：');
+    if(t && t.trim()){ state.tags.push({text:t.trim(), selected:false}); saveState(); renderTags(); }
+  };
+  area.appendChild(addBtn);
+}
+function removeTag(i){ state.tags.splice(i, 1); saveState(); renderTags(); }
+function updateInputFromTags(){
+  const input = document.getElementById('promptInput');
+  const selected = state.tags.filter(t=>t.selected).map(t=>t.text);
+  let base = input.value;
+  state.tags.forEach(t => { base = base.replace(new RegExp(',?\\s*'+t.text.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'), 'g'), ''); });
+  base = base.trim();
+  input.value = [base, ...selected].filter(Boolean).join(', ');
+}
+
+// ==================== 识图功能 ====================
+function handleImageGen(){
+  state.imageMode = !state.imageMode;
+  const panel = document.getElementById('imageUploadPanel');
+  const btn = document.getElementById('imageGenBtn');
+  panel.classList.toggle('active', state.imageMode);
+  btn.textContent = state.imageMode ? '关闭识图' : '识图';
+  if(state.imageMode){
+    renderImagePreviews();
+    if(state.imageDataUrls.length === 0){
+      const fileInput = document.getElementById('hiddenImageInput');
+      if(fileInput) fileInput.click();
+    }
+  }
+  saveState();
+}
+
+function handleFilesSelected(ev){
+  const files = Array.from(ev.target.files || []);
+  processImageFiles(files);
+  ev.target.value = '';
+}
+
+function handleDropFiles(ev){
+  ev.preventDefault();
+  const files = Array.from(ev.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+  processImageFiles(files);
+}
+
+function compressUploadedImage(file, maxDim = 1024, quality = 0.85){
+  return new Promise((resolve) => {
+    const r = new FileReader();
+    r.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > maxDim || h > maxDim){
+          if(w >= h){ h = Math.round(h * (maxDim / w)); w = maxDim; }
+          else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.onerror = () => resolve(e.target.result);
+      img.src = e.target.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+async function processImageFiles(files){
+  if(!files.length) return;
+  for(const f of files){
+    const compressedUrl = await compressUploadedImage(f);
+    state.imageDataUrls.push(compressedUrl);
+  }
+  renderImagePreviews();
+}
+
+function clearAllUploadedImages(){
+  state.imageDataUrls = [];
+  renderImagePreviews();
+}
+
+function renderImagePreviews(){
+  const area = document.getElementById('imagePreviewArea');
+  area.innerHTML = '';
+  state.imageDataUrls.forEach((url, i) => {
+    const div = document.createElement('div');
+    div.className = 'image-preview-item';
+    div.innerHTML = `<img src="${url}"><div class="remove-img" onclick="state.imageDataUrls.splice(${i},1);renderImagePreviews();" title="移除此图">✕</div>`;
+    area.appendChild(div);
+  });
+  const labelBtn = document.createElement('label');
+  labelBtn.className = 'add-img-label';
+  labelBtn.setAttribute('for', 'hiddenImageInput');
+  labelBtn.innerHTML = `<span style="font-size:20px;line-height:1;">+</span><span>添加图片</span>`;
+  area.appendChild(labelBtn);
+}
+
+// ==================== 构建 NAI 专用 System Prompt ====================
+function buildNaiSystemPrompt(){
+  const count = state.params.groupCount || 3;
+  const activePureArtists = state.artists.filter(a => a.active && !a.isStyleTemplate);
+  const activeStyleTemplates = state.artists.filter(a => a.active && a.isStyleTemplate);
+  const activeThinks = state.thinkPrompts.filter(t => t.active);
+
+  let styleInstruction = '';
+  if(activeStyleTemplates.length > 0){
+    styleInstruction += `\n\n【核心风格保留与模仿指令（最高优先级）】\n用户启用了以下“保留风格预设”：\n`;
+    activeStyleTemplates.forEach((st, idx) => {
+      styleInstruction += `预设${idx+1}「${st.name}」:\n- 原正向提示词模板: ${st.content}\n`;
+      if(st.negative) styleInstruction += `- 原负面提示词参考: ${st.negative}\n`;
+    });
+    styleInstruction += `请严格执行以下操作：
+1. 提取并完整保留上述模板中的【画师串（如 artist:xxx 及括号权重）】、【画风质感词】、【光影氛围词】与【整体排列架构】。
+2. 根据用户本次输入的新需求，将其中的【角色外貌、服装、动作、神态、具体场景】替换为新的描述。
+3. 负面提示词（negative）请以原负面提示词为基础保留，并根据本次新画面需求判断是否有必要微调。`;
+  } else if(activePureArtists.length > 0){
+    const artistStr = activePureArtists.map(a => a.content).join(', ');
+    styleInstruction += `\n   - 请在正向提示词中完整保留并融入此画师串：${artistStr}`;
+  } else {
+    styleInstruction += `\n   - 请为每组自动搭配适合画面风格的 NAI 知名画师串组合（如 artist:xxx，合理运用 {} 与 [] 调节权重）。`;
+  }
+
+  let thinkText = '';
+  if(activeThinks.length){
+    thinkText = '\n\n【预思考指令】\n请在生成前充分参考以下自定义规则：\n' + activeThinks.map(t=>`- ${t.name}: ${t.content}`).join('\n');
+  }
+
+  return `你是一个专业的 NovelAI (支持 NAI V3 / V4 / V4.5 / V5) 提示词与画师串生成专家。
+核心规则：
+1. 默认且仅输出英文 Danbooru 标准格式标签与自然语言描述结合（以英文逗号分隔）。
+2. 每组结果必须包含两个字段：
+   - "prompt": 正向提示词，包含画师串（Artist Tags）、人物特征、服装、动作、构图、光影及质量词（如 masterpiece, best quality, very aesthetic, absurdres）。${styleInstruction}
+   - "negative": 负面提示词（Undesired Content），用于排除崩坏与不需要的元素（如 lowres, {bad}, error, fewer, extra, missing, worst quality, jpeg artifacts, bad quality, watermark, displeasing, chromatic aberration, signature, extra digits, artistic error, username, scan）。
+3. 每次生成 ${count} 组不同的提示词方案。
+4. 严格仅输出 JSON 数组格式，例如：[{"prompt": "...", "negative": "..."}]，不要输出任何额外解释。${thinkText}`;
+}
+
+async function handleGenerate(){
+  const text = document.getElementById('promptInput').value.trim();
+  if(!text && (!state.imageMode || !state.imageDataUrls.length)){
+    alert('请输入画面描述，或开启识图并添加参考图片');
+    return;
+  }
+  await doGenerate(text);
+}
+async function handleRefresh(){
+  if(!state.lastPrompt && (!state.imageMode || !state.imageDataUrls.length)){
+    alert('暂无上一次记录');
+    return;
+  }
+  await doGenerate(state.lastPrompt);
+}
+
+async function doGenerate(promptText){
+  if(state.activeApiIndex < 0 || !state.apiKeys[state.activeApiIndex]){ alert('请先在右上角设置中配置并连接 LLM API'); return; }
+  state.lastPrompt = promptText;
+  document.getElementById('resultsGrid').innerHTML = '';
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('loadingIndicator').classList.add('show');
+
+  const api = state.apiKeys[state.activeApiIndex];
+  const messages = [];
+
+  if(state.stPreset && state.stPreset.enabled && Array.isArray(state.stPreset.items)){
+    state.stPreset.items.forEach(item => {
+      if(item.enabled && item.content && item.content.trim()){
+        const role = ['system', 'user', 'assistant'].includes(item.role) ? item.role : 'system';
+        messages.push({ role, content: item.content });
+      }
+    });
+  }
+
+  messages.push({role:'system', content: buildNaiSystemPrompt()});
+
+  if(state.imageMode && state.imageDataUrls.length){
+    const parts = [{type:'text', text: promptText ? `请结合参考图与以下要求生成 NAI 英文提示词与负面词：${promptText}` : '请详细分析上传的图片内容（包含角色特征、服装、动作、构图、光影与画风），并转化为专业的 NAI 英文提示词与负面词。'}];
+    state.imageDataUrls.forEach(url => parts.push({type:'image_url', image_url:{url}}));
+    messages.push({role:'user', content: parts});
+  } else {
+    messages.push({role:'user', content: promptText});
+  }
+
+  try {
+    const resp = await fetch(api.url.replace(/\/+$/,'') + '/chat/completions', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+api.key},
+      body: JSON.stringify({model: state.selectedModel, messages, temperature: 0.85})
+    });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const raw = data.choices?.[0]?.message?.content || '[]';
+    const match = raw.match(/\[[\s\S]*\]/);
+    let parsed = JSON.parse(match ? match[0] : raw);
+    if(!Array.isArray(parsed)) parsed = [parsed];
+    state.currentResults = parsed.map(item => ({
+      prompt: item.prompt || '',
+      negative: item.negative || 'lowres, {bad}, error, worst quality, bad anatomy, bad hands, missing fingers'
+    }));
+    state.history.unshift({time: new Date().toLocaleString(), prompt: promptText || '[识图生成]', results: state.currentResults});
+    if(state.history.length > 30) state.history.length = 30;
+    renderResults();
+    saveState();
+  } catch(e){
+    alert('生成失败: ' + e.message);
+    document.getElementById('emptyState').style.display = 'block';
+  } finally {
+    document.getElementById('loadingIndicator').classList.remove('show');
+  }
+}
+
+function renderResults(){
+  const grid = document.getElementById('resultsGrid'); grid.innerHTML = '';
+  if(!state.currentResults.length){ document.getElementById('emptyState').style.display = 'block'; return; }
+  document.getElementById('emptyState').style.display = 'none';
+
+  state.currentResults.forEach((r, i) => {
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.dataset.mode = 'pos';
+    card.title = '点击卡片直接复制当前显示的提示词';
+    card.innerHTML = `
+      <div class="card-header">
+        <span class="card-index">Group ${i+1} · 正向提示词 (点击卡片直接复制)</span>
+        <button class="swap-btn" onclick="event.stopPropagation();toggleCardMode(this, ${i})">⇄ 切换负面词</button>
+      </div>
+      <div class="result-text">${escapeHtml(r.prompt)}</div>
+      <button class="save-style-btn" onclick="event.stopPropagation();saveCardStyleToPreset(${i})" title="将此组画师串与风格保存到上方预设，后续生成可模仿此风格并替换角色描述">✨ 保留此风格到画师串预设</button>
+      <button class="send-to-img-btn" onclick="event.stopPropagation();sendToNaiGen(${i})" title="将该组提示词加入生图排队队列（自动生成并保存至本地，不打断当前页面）">🎨 一键生图</button>
+    `;
+    card.onclick = () => {
+      const mode = card.dataset.mode;
+      const textToCopy = mode === 'pos' ? r.prompt : r.negative;
+      copyText(textToCopy, mode === 'pos' ? `✓ 已复制 Group ${i+1} 正向提示词` : `✓ 已复制 Group ${i+1} 负面提示词`);
+    };
+    grid.appendChild(card);
+  });
+}
+
+function toggleCardMode(btn, idx){
+  const card = btn.closest('.result-card');
+  const r = state.currentResults[idx];
+  if(card.dataset.mode === 'pos'){
+    card.dataset.mode = 'neg';
+    card.classList.add('neg-mode');
+    card.querySelector('.card-index').textContent = `Group ${idx+1} · 负面词 (点击卡片直接复制)`;
+    btn.textContent = '⇄ 切换正向词';
+    card.querySelector('.result-text').textContent = r.negative;
+  } else {
+    card.dataset.mode = 'pos';
+    card.classList.remove('neg-mode');
+    card.querySelector('.card-index').textContent = `Group ${idx+1} · 正向提示词 (点击卡片直接复制)`;
+    btn.textContent = '⇄ 切换负面词';
+    card.querySelector('.result-text').textContent = r.prompt;
+  }
+}
+
+// 在文字生成页或其他页面点击一键生图：自动同步提示词并加入后台生图排队队列
+function sendToNaiGen(idx){
+  const r = state.currentResults[idx];
+  if(!r) return;
+  document.getElementById('naiPosInput').value = r.prompt;
+  document.getElementById('naiNegInput').value = r.negative;
+  enqueueNaiGeneration(r.prompt, r.negative, `Group ${idx+1}`);
+}
+
+function switchPage(){
+  if(state.currentPage === 'prompt'){
+    state.currentPage = 'imggen';
+    document.getElementById('promptPage').classList.add('hidden');
+    document.getElementById('imgGenPage').classList.add('active');
+    document.getElementById('pageSwitchBtn').classList.add('active');
+    document.getElementById('paramsBar').style.display = 'none';
+    document.getElementById('collapseBtn').style.display = 'none';
+  } else {
+    state.currentPage = 'prompt';
+    document.getElementById('promptPage').classList.remove('hidden');
+    document.getElementById('imgGenPage').classList.remove('active');
+    document.getElementById('pageSwitchBtn').classList.remove('active');
+    document.getElementById('paramsBar').style.display = '';
+    document.getElementById('collapseBtn').style.display = '';
+  }
+  saveState(); setTimeout(updateScrollPadding, 50);
+}
+
+// ==================== NAI 尺寸比例自定义管理 ====================
+function renderSizePresets(){
+  const container = document.getElementById('naiSizePills');
+  container.innerHTML = '';
+  state.sizePresets.forEach((p, idx) => {
+    const isActive = (state.nai.width === p.w && state.nai.height === p.h);
+    const btn = document.createElement('button');
+    btn.className = 'img-size-pill' + (isActive ? ' active' : '');
+    btn.innerHTML = `<span>${escapeHtml(p.label)}</span>` + (!p.builtin ? `<span class="del-size" onclick="event.stopPropagation();deleteSizePreset(${idx})" title="删除此自定义比例">✕</span>` : '');
+    btn.onclick = () => {
+      state.nai.width = p.w;
+      state.nai.height = p.h;
+      document.getElementById('customWidthInput').value = p.w;
+      document.getElementById('customHeightInput').value = p.h;
+      renderSizePresets();
+      updateNaiCost();
+    };
+    container.appendChild(btn);
+  });
+}
+
+function onCustomSizeInput(){
+  let w = parseInt(document.getElementById('customWidthInput').value) || 832;
+  let h = parseInt(document.getElementById('customHeightInput').value) || 1216;
+  w = Math.max(256, Math.min(2048, Math.round(w / 64) * 64));
+  h = Math.max(256, Math.min(2048, Math.round(h / 64) * 64));
+  document.getElementById('customWidthInput').value = w;
+  document.getElementById('customHeightInput').value = h;
+  state.nai.width = w;
+  state.nai.height = h;
+  renderSizePresets();
+  updateNaiCost();
+}
+
+function swapCustomSize(){
+  const w = state.nai.width;
+  const h = state.nai.height;
+  state.nai.width = h;
+  state.nai.height = w;
+  document.getElementById('customWidthInput').value = state.nai.width;
+  document.getElementById('customHeightInput').value = state.nai.height;
+  renderSizePresets();
+  updateNaiCost();
+}
+
+function addCustomSizePreset(){
+  onCustomSizeInput();
+  const w = state.nai.width;
+  const h = state.nai.height;
+  const name = prompt(`保存当前尺寸 (${w}×${h}) 为快捷比例，请输入名称：`, `自定义 (${w}×${h})`);
+  if(!name || !name.trim()) return;
+  state.sizePresets.push({ label: name.trim(), w, h, builtin: false });
+  saveState();
+  renderSizePresets();
+  showToast(`✓ 已添加比例预设：${name.trim()}`);
+}
+
+function deleteSizePreset(idx){
+  state.sizePresets.splice(idx, 1);
+  saveState();
+  renderSizePresets();
+}
+
+// ==================== NAI 生图配置、余额查询与排队生图系统 ====================
+function saveNaiConfig(){
+  state.nai.apiKey = document.getElementById('naiApiKey').value.trim();
+  state.nai.apiUrl = document.getElementById('naiApiUrl').value.trim() || 'https://image.novelai.net';
+  state.nai.model = document.getElementById('naiModel').value;
+  state.nai.sampler = document.getElementById('naiSampler').value;
+  state.nai.steps = parseInt(document.getElementById('naiSteps').value) || 28;
+  state.nai.cfg = parseFloat(document.getElementById('naiCfg').value) || 5.0;
+  state.nai.transparent = document.getElementById('naiTransparent').checked;
+  state.nai.transTol = parseInt(document.getElementById('naiTransTol').value) || 28;
+  state.nai.smea = document.getElementById('naiSmea').checked;
+  state.nai.dyn = document.getElementById('naiDyn').checked;
+  saveState();
+}
+
+function updateNaiCost(){
+  const steps = parseInt(document.getElementById('naiSteps').value) || 28;
+  document.getElementById('stepsValDisp').textContent = steps;
+  const pixels = state.nai.width * state.nai.height;
+  let cost = Math.ceil((pixels / 1048576) * steps * 0.55);
+  const isFreeEligible = (pixels <= 1048576 && steps <= 28);
+  document.getElementById('costEstimate').textContent = isFreeEligible
+    ? `当前尺寸 ${state.nai.width}×${state.nai.height} · 预计消耗: 0 Anlas (Opus 订阅免费额度内，非订阅约 ${cost} Anlas)`
+    : `当前尺寸 ${state.nai.width}×${state.nai.height} · 预计消耗: 约 ${cost} Anlas (超出免费步数/尺寸限制)`;
+  saveNaiConfig();
+}
+
+async function checkNaiBalance(){
+  saveNaiConfig();
+  if(!state.nai.apiKey){ alert('请先填写 NAI API Token'); return null; }
+  try {
+    const resp = await fetch('https://api.novelai.net/user/subscription', {
+      headers: {'Authorization': 'Bearer ' + state.nai.apiKey}
+    });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const steps = data.trainingStepsLeft || {};
+    const total = (steps.fixedTrainingStepsLeft || 0) + (steps.purchasedTrainingSteps || 0);
+    state.nai.anlas = total;
+    document.getElementById('anlasDisplay').textContent = `⚡ ${total}`;
+    saveState();
+    return total;
+  } catch(e){
+    document.getElementById('anlasDisplay').textContent = `⚡ 受限`;
+    return null;
+  }
+}
+
+function updateQueueStatusUI(){
+  const topBadge = document.getElementById('topQueueBadge');
+  const loadingEl = document.getElementById('imgLoading');
+  const loadingText = document.getElementById('imgLoadingText');
+  const totalRemaining = (isProcessingNaiQueue ? 1 : 0) + naiGenQueue.length;
+
+  if(totalRemaining > 0){
+    topBadge.classList.add('active');
+    topBadge.textContent = `⏳ 生图队列: 正在生成 1 张` + (naiGenQueue.length > 0 ? `，排队等待 ${naiGenQueue.length} 张` : '');
+    loadingEl.classList.add('show');
+    if(loadingText){
+      loadingText.textContent = naiGenQueue.length > 0
+        ? `正在请求 NovelAI 生成图片...（队列中还有 ${naiGenQueue.length} 张等待自动生成）`
+        : `正在请求 NovelAI 生成图片...`;
+    }
+    document.getElementById('imgEmpty').style.display = 'none';
+  } else {
+    topBadge.classList.remove('active');
+    loadingEl.classList.remove('show');
+    if(!sessionImages.length){
+      document.getElementById('imgEmpty').style.display = 'block';
+    }
+  }
+}
+
+// 点击“立即生成最新图片”按钮时触发入队
+function doNaiGenerate(){
+  saveNaiConfig();
+  const pos = document.getElementById('naiPosInput').value.trim();
+  const neg = document.getElementById('naiNegInput').value.trim();
+  if(!pos){
+    if(state.currentPage !== 'imggen') switchPage();
+    toggleImgTopSection('prompts');
+    alert('请先在「📝 提示词与立即生图」中输入正向提示词');
+    return;
+  }
+  enqueueNaiGeneration(pos, neg, '生图页请求');
+}
+
+// 将生图请求快照加入队列，若队列空闲则立即启动，若正在运行则自动排队
+function enqueueNaiGeneration(posPrompt, negPrompt, sourceLabel = ''){
+  saveNaiConfig();
+  if(!state.nai.apiKey){
+    if(state.currentPage !== 'imggen') switchPage();
+    toggleImgTopSection('api');
+    alert('请先在「🔑 API 配置与点数」中填写 NovelAI API Token');
+    return;
+  }
+
+  const modelSelectEl = document.getElementById('naiModel');
+  const modelLabel = modelSelectEl.options[modelSelectEl.selectedIndex]?.text || state.nai.model;
+
+  const taskSnapshot = {
+    pos: posPrompt,
+    neg: negPrompt || '',
+    sourceLabel,
+    apiKey: state.nai.apiKey,
+    apiUrl: state.nai.apiUrl,
+    model: state.nai.model,
+    modelLabel: modelLabel,
+    sampler: state.nai.sampler,
+    steps: state.nai.steps,
+    cfg: state.nai.cfg,
+    width: state.nai.width,
+    height: state.nai.height,
+    transparent: state.nai.transparent,
+    transTol: state.nai.transTol,
+    smea: state.nai.smea,
+    dyn: state.nai.dyn
+  };
+
+  naiGenQueue.push(taskSnapshot);
+  updateQueueStatusUI();
+
+  if(isProcessingNaiQueue){
+    showToast(`⏳ 已加入生图排队队列 (当前排第 ${naiGenQueue.length} 位)`);
+  } else {
+    showToast(`🎨 开始生成图片...`);
+    processNaiQueue();
+  }
+}
+
+async function processNaiQueue(){
+  if(isProcessingNaiQueue) return;
+  isProcessingNaiQueue = true;
+  updateQueueStatusUI();
+
+  while(naiGenQueue.length > 0){
+    const task = naiGenQueue.shift();
+    updateQueueStatusUI();
+    await executeSingleNaiTask(task);
+  }
+
+  isProcessingNaiQueue = false;
+  updateQueueStatusUI();
+}
+
+async function executeSingleNaiTask(task){
+  const beforeAnlas = await checkNaiBalance();
+  const finalPrompt = task.transparent
+    ? `${task.pos}, transparent background, simple background, white background`
+    : task.pos;
+
+  const isV4OrV5 = task.model.includes('nai-diffusion-4') || task.model.includes('nai-diffusion-5');
+  const seed = Math.floor(Math.random() * 4294967295);
+
+  const parameters = {
+    params_version: isV4OrV5 ? 3 : 1,
+    width: task.width,
+    height: task.height,
+    scale: task.cfg,
+    sampler: task.sampler,
+    steps: task.steps,
+    n_samples: 1,
+    ucPreset: 0,
+    qualityToggle: true,
+    dynamic_thresholding: false,
+    controlnet_strength: 1,
+    legacy: false,
+    add_original_image: false,
+    cfg_rescale: 0,
+    noise_schedule: isV4OrV5 ? "karras" : "native",
+    seed: seed,
+    negative_prompt: task.neg
+  };
+
+  if(!isV4OrV5){
+    parameters.sm = task.smea;
+    parameters.sm_dyn = task.dyn;
+  } else {
+    parameters.v4_prompt = {
+      caption: { base_caption: finalPrompt, char_captions: [] },
+      use_coords: false,
+      use_order: true
+    };
+    parameters.v4_negative_prompt = {
+      caption: { base_caption: task.neg, char_captions: [] }
+    };
+  }
+
+  const payload = {
+    input: finalPrompt,
+    model: task.model,
+    action: "generate",
+    parameters
+  };
+
+  try {
+    const resp = await fetch(task.apiUrl.replace(/\/+$/,'') + '/ai/generate-image', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + task.apiKey
+      },
+      body: JSON.stringify(payload)
+    });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const blob = await resp.blob();
+    const zip = await JSZip.loadAsync(blob);
+    const fileKeys = Object.keys(zip.files);
+    if(!fileKeys.length) throw new Error('返回的 ZIP 中无图片文件');
+    const imgData = await zip.file(fileKeys[0]).async('base64');
+    let dataUrl = 'data:image/png;base64,' + imgData;
+
+    if(task.transparent){
+      dataUrl = await makeImageTransparent(dataUrl, task.transTol);
+    }
+
+    const thumbUrl = await generateThumbDataUrl(dataUrl, 220);
+
+    const recordItem = {
+      id: 'img_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+      timestamp: Date.now(),
+      timeStr: new Date().toLocaleString(),
+      dataUrl: dataUrl,
+      thumbUrl: thumbUrl,
+      posPrompt: task.pos,
+      negPrompt: task.neg,
+      model: task.model,
+      modelLabel: task.modelLabel,
+      sampler: task.sampler,
+      steps: task.steps,
+      cfg: task.cfg,
+      width: task.width,
+      height: task.height,
+      transparent: task.transparent,
+      seed: seed
+    };
+
+    sessionImages = [recordItem];
+    await saveImageToDB(recordItem, true);
+    renderSessionImages();
+
+    const afterAnlas = await checkNaiBalance();
+    if(beforeAnlas !== null && afterAnlas !== null){
+      const diff = beforeAnlas - afterAnlas;
+      document.getElementById('costEstimate').textContent = `本次实际消耗: ${diff} Anlas`;
+    }
+    showToast(naiGenQueue.length > 0 ? `✓ 完成 1 张并已存本地 (剩余 ${naiGenQueue.length} 张继续生成)` : `✓ 图片生成完毕并已自动保存至本地！`);
+  } catch(e){
+    alert('NAI 生图失败: ' + e.message);
+  }
+}
+
+// 渲染当前最新生成结果：左下角直接下载，右下角删除自动同步删除本地记录
+function renderSessionImages(){
+  const grid = document.getElementById('imgResultsGrid');
+  const empty = document.getElementById('imgEmpty');
+  grid.innerHTML = '';
+  if(!sessionImages.length){
+    if(!isProcessingNaiQueue && naiGenQueue.length === 0) empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const item = sessionImages[0];
+  const card = document.createElement('div');
+  card.className = 'latest-img-card';
+  card.innerHTML = `
+    <div class="img-result-thumb-wrap checkerboard-bg" onclick="openImgDetailModal('${item.id}', 'session')" title="点击查看与复制生成参数">
+      <img src="${item.dataUrl || item.thumbUrl}" alt="latest_gen">
+    </div>
+    <div class="img-card-footer">
+      <div class="img-card-actions">
+        <button class="mini-act-btn dl" onclick="event.stopPropagation();downloadImageById('${item.id}')" title="直接下载原图 PNG">⬇ 下载</button>
+        <span>${item.width}×${item.height}${item.transparent ? '·透明' : ''}</span>
+      </div>
+      <div class="img-card-actions">
+        <button class="mini-act-btn" onclick="event.stopPropagation();openImgDetailModal('${item.id}', 'session')">详情/复制</button>
+        <button class="mini-act-btn del" onclick="event.stopPropagation();deleteCurrentLatestAndLocal('${item.id}')" title="删除当前图片并同步删除保存在本地的记录">🗑 删除</button>
+      </div>
+    </div>
+  `;
+  grid.appendChild(card);
+}
+
+// 点击当前图片右下角的删除：同时删除当前展示图片与保存在本地 IndexedDB 中的记录
+async function deleteCurrentLatestAndLocal(targetId){
+  const idToDelete = targetId || (sessionImages[0] && sessionImages[0].id);
+  sessionImages = [];
+  renderSessionImages();
+  if(idToDelete){
+    await deleteImageFromDB(idToDelete);
+    showToast('🗑 已删除当前图片及本地保存的对应记录');
+  }
+}
+
+// 构建单个历史小图 DOM 节点（支持事件局部处理，无需重建整个列表）
+function createSavedCardElement(item){
+  const isSelected = selectedBatchIds.has(item.id);
+  const card = document.createElement('div');
+  card.className = 'small-history-card checkerboard-bg' + (batchSelectMode && isSelected ? ' batch-selected' : '');
+  card.dataset.imgId = item.id;
+  card.title = `${item.timeStr || ''}\n${item.modelLabel || item.model} (${item.width}×${item.height})\n点击查看详情/勾选，左下角直接下载`;
+
+  card.onclick = () => {
+    if(batchSelectMode){
+      const nowSelected = !selectedBatchIds.has(item.id);
+      if(nowSelected) selectedBatchIds.add(item.id);
+      else selectedBatchIds.delete(item.id);
+      card.classList.toggle('batch-selected', nowSelected);
+      const badge = card.querySelector('.batch-check-badge');
+      if(badge) badge.textContent = nowSelected ? '✓' : '';
+      updateBatchUIButtons();
+    } else {
+      openImgDetailModal(item.id, 'saved');
+    }
+  };
+
+  card.innerHTML = `
+    <img src="${item.thumbUrl || item.dataUrl || ''}" alt="saved" loading="lazy" decoding="async">
+    <div class="batch-check-badge">${isSelected ? '✓' : ''}</div>
+    <button class="small-dl-btn" onclick="event.stopPropagation();downloadImageById('${item.id}')" title="直接下载此图片 PNG">⬇</button>
+    <button class="small-del-btn" onclick="event.stopPropagation();deleteSingleSavedAndSyncSession('${item.id}')" title="删除此条历史">✕</button>
+  `;
+  return card;
+}
+
+// 新增图片时仅在头部插入单个 DOM 节点，不重绘旧节点
+function prependSingleSavedCardDOM(item){
+  const grid = document.getElementById('savedImgHistoryGrid');
+  const empty = document.getElementById('savedImgEmpty');
+  const countDisp = document.getElementById('savedCountDisp');
+  if(countDisp) countDisp.textContent = savedImages.length;
+  if(empty) empty.style.display = 'none';
+  if(grid){
+    const card = createSavedCardElement(item);
+    grid.prepend(card);
+  }
+}
+
+// 渲染本地生图历史小图网格（使用 DocumentFragment 一次性挂载）
+function renderSavedImages(){
+  const grid = document.getElementById('savedImgHistoryGrid');
+  const empty = document.getElementById('savedImgEmpty');
+  const countDisp = document.getElementById('savedCountDisp');
+  if(countDisp) countDisp.textContent = savedImages.length;
+  if(!grid) return;
+
+  grid.classList.toggle('batch-mode', batchSelectMode);
+  grid.replaceChildren();
+  if(!savedImages.length){
+    if(empty) empty.style.display = 'block';
+    return;
+  }
+  if(empty) empty.style.display = 'none';
+
+  const frag = document.createDocumentFragment();
+  savedImages.forEach((item) => {
+    frag.appendChild(createSavedCardElement(item));
+  });
+  grid.appendChild(frag);
+}
+
+async function deleteSingleSavedAndSyncSession(id){
+  sessionImages = sessionImages.filter(x => x.id !== id);
+  await deleteImageFromDB(id);
+  renderSessionImages();
+}
+
+async function openImgDetailModal(id, source){
+  currentDetailSource = source;
+  let item = (source === 'session' ? sessionImages : savedImages).find(x => x.id === id)
+             || savedImages.find(x => x.id === id)
+             || sessionImages.find(x => x.id === id);
+  if(!item) return;
+
+  // 先用缩略图或已有数据立即弹出弹窗，随后按需异步加载原图
+  currentDetailItem = { ...item };
+  document.getElementById('detailModalImg').src = item.dataUrl || item.thumbUrl || '';
+  document.getElementById('detailModalPos').textContent = item.posPrompt || '';
+  document.getElementById('detailModalNeg').textContent = item.negPrompt || '';
+
+  const metaEl = document.getElementById('detailModalMeta');
+  metaEl.innerHTML = `
+    <span class="detail-meta-tag">模型: ${escapeHtml(item.modelLabel || item.model)}</span>
+    <span class="detail-meta-tag">尺寸: ${item.width}×${item.height}</span>
+    <span class="detail-meta-tag">步数: ${item.steps}</span>
+    <span class="detail-meta-tag">CFG: ${item.cfg}</span>
+    <span class="detail-meta-tag">采样: ${escapeHtml(item.sampler)}</span>
+    <span class="detail-meta-tag">透明底: ${item.transparent ? '开启' : '关闭'}</span>
+    <span class="detail-meta-tag">Seed: ${item.seed || '--'}</span>
+    <span class="detail-meta-tag">时间: ${escapeHtml(item.timeStr || '')}</span>
+  `;
+
+  document.getElementById('imgDetailModal').classList.add('show');
+
+  if(!currentDetailItem.dataUrl){
+    const fullRec = await getFullRecordFromDB(id);
+    if(fullRec && fullRec.dataUrl && currentDetailItem && currentDetailItem.id === id){
+      currentDetailItem.dataUrl = fullRec.dataUrl;
+      document.getElementById('detailModalImg').src = fullRec.dataUrl;
+    }
+  }
+}
+
+function copyDetailPos(){
+  if(!currentDetailItem) return;
+  copyText(currentDetailItem.posPrompt || '', '✓ 已复制图片正向提示词');
+}
+
+function copyDetailNeg(){
+  if(!currentDetailItem) return;
+  copyText(currentDetailItem.negPrompt || '', '✓ 已复制图片负面提示词');
+}
+
+function saveDetailToStylePreset(){
+  if(!currentDetailItem) return;
+  const name = prompt('将此图的【画师串与风格架构】保存到画师串预设，请起个名字：', `保留风格_${state.artists.length + 1}`);
+  if(!name || !name.trim()) return;
+  state.artists.push({
+    name: name.trim(),
+    content: currentDetailItem.posPrompt || '',
+    negative: currentDetailItem.negPrompt || '',
+    isStyleTemplate: true,
+    active: true
+  });
+  saveState();
+  renderArtists();
+  showToast(`✨ 已将此图风格保存为「${name.trim()}」并启用！`);
+}
+
+function closeImgDetailModal(){
+  document.getElementById('imgDetailModal').classList.remove('show');
+  currentDetailItem = null;
+}
+
+function applyDetailToInputs(){
+  if(!currentDetailItem) return;
+  document.getElementById('naiPosInput').value = currentDetailItem.posPrompt || '';
+  document.getElementById('naiNegInput').value = currentDetailItem.negPrompt || '';
+  if(currentDetailItem.model){
+    document.getElementById('naiModel').value = currentDetailItem.model;
+  }
+  if(currentDetailItem.width && currentDetailItem.height){
+    state.nai.width = currentDetailItem.width;
+    state.nai.height = currentDetailItem.height;
+    document.getElementById('customWidthInput').value = state.nai.width;
+    document.getElementById('customHeightInput').value = state.nai.height;
+    renderSizePresets();
+  }
+  saveNaiConfig();
+  closeImgDetailModal();
+  showToast('✓ 已将该图片的正面词、负面词与参数填入生图框');
+}
+
+async function downloadDetailImage(){
+  if(!currentDetailItem) return;
+  await downloadImageById(currentDetailItem.id);
+}
+
+async function deleteDetailImage(){
+  if(!currentDetailItem) return;
+  const id = currentDetailItem.id;
+  sessionImages = sessionImages.filter(x => x.id !== id);
+  await deleteImageFromDB(id);
+  renderSessionImages();
+  closeImgDetailModal();
+}
+
+// ==================== LLM API 设置与历史记录 ====================
+function openSettings(){
+  renderApiKeys();
+  renderStPresetUI();
+  document.getElementById('settingsModal').classList.add('show');
+}
+function closeSettings(){ document.getElementById('settingsModal').classList.remove('show'); }
+function saveApiKey(){
+  const name = document.getElementById('apiName').value.trim() || 'API';
+  const url = document.getElementById('apiUrl').value.trim();
+  const key = document.getElementById('apiKey').value.trim();
+  if(!url || !key) return alert('请完整填写 URL 和 Key');
+  state.apiKeys.push({name, url, key});
+  state.activeApiIndex = state.apiKeys.length - 1;
+  saveState(); renderApiKeys();
+}
+function renderApiKeys(){
+  const list = document.getElementById('apiKeysList'); list.innerHTML = '';
+  state.apiKeys.forEach((k, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:6px;background:var(--surface2);margin-bottom:4px;border-radius:6px;font-size:12px;gap:8px;word-break:break-all;';
+    div.innerHTML = `<span><b>${escapeHtml(k.name)}</b> (${escapeHtml(k.url)}) - Key: ${escapeHtml(k.key)}</span><div style="white-space:nowrap;"><button class="small-btn" onclick="state.activeApiIndex=${i};saveState();renderApiKeys();">${state.activeApiIndex===i?'✓ 使用中':'选用'}</button> <button class="small-btn" onclick="state.apiKeys.splice(${i},1);saveState();renderApiKeys();">删除</button></div>`;
+    list.appendChild(div);
+  });
+}
+async function connectApi(){
+  const api = state.apiKeys[state.activeApiIndex];
+  if(!api) return alert('请先保存节点');
+  try {
+    const resp = await fetch(api.url.replace(/\/+$/,'') + '/models', {headers:{'Authorization':'Bearer '+api.key}});
+    const data = await resp.json();
+    state.models = (data.data||[]).map(m=>m.id);
+    state.connected = true;
+    state.selectedModel = state.models[0] || 'gpt-4o-mini';
+    const sel = document.getElementById('modelSelect');
+    document.getElementById('modelSelectGroup').style.display = 'block';
+    sel.innerHTML = state.models.map(m=>`<option value="${m}">${m}</option>`).join('');
+    saveState(); updateConnectionStatus();
+  } catch(e){ alert('连接失败: ' + e.message); }
+}
+function updateConnectionStatus(){
+  document.getElementById('statusDot').classList.toggle('connected', state.connected);
+  document.getElementById('statusText').textContent = state.connected ? 'LLM 已连接' : 'LLM 未连接';
+  document.getElementById('modelDisplay').textContent = state.selectedModel || '';
+  const badge = document.getElementById('stPresetStatusBadge');
+  if(badge){
+    if(state.stPreset && state.stPreset.enabled && state.stPreset.items.length){
+      const act = state.stPreset.items.filter(x => x.enabled).length;
+      badge.textContent = `· 🍺酒馆预设已开启(${act}条)`;
+    } else {
+      badge.textContent = '';
+    }
+  }
+}
+
+function openHistory(){
+  const list = document.getElementById('historyList'); list.innerHTML = '';
+  if(!state.history.length){
+    list.innerHTML = '<div class="empty-state">暂无历史记录</div>';
+  }
+  state.history.forEach((h, idx) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:10px;background:var(--surface2);margin-bottom:8px;border-radius:6px;font-size:12px;cursor:pointer;border:1px solid var(--border);';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+        <span style="color:var(--accent2);font-weight:600;">${escapeHtml(h.prompt)}</span>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <button class="small-btn" onclick="event.stopPropagation();copyText(state.history[${idx}].prompt, '✓ 已复制历史输入词')">复制输入词</button>
+          <span style="color:var(--text3);font-size:11px;">${h.time}</span>
+        </div>
+      </div>
+      <div style="color:var(--text3);font-size:11px;">包含 ${(h.results||[]).length} 组生成结果 (点击加载到主界面)</div>
+    `;
+    div.onclick = () => { state.currentResults = h.results; renderResults(); closeHistory(); };
+    list.appendChild(div);
+  });
+  document.getElementById('historyModal').classList.add('show');
+}
+function closeHistory(){ document.getElementById('historyModal').classList.remove('show'); }
+
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+async function init(){
+  loadState();
+  document.getElementById('groupCount').value = state.params.groupCount || 3;
+  document.getElementById('naiApiKey').value = state.nai.apiKey || '';
+  document.getElementById('naiApiUrl').value = state.nai.apiUrl || 'https://image.novelai.net';
+  document.getElementById('naiModel').value = state.nai.model || 'nai-diffusion-5-full';
+  document.getElementById('naiSampler').value = state.nai.sampler || 'k_euler_ancestral';
+  document.getElementById('naiSteps').value = state.nai.steps || 28;
+  document.getElementById('naiCfg').value = state.nai.cfg || 5.0;
+  document.getElementById('cfgValDisp').textContent = state.nai.cfg || 5.0;
+  document.getElementById('customWidthInput').value = state.nai.width || 832;
+  document.getElementById('customHeightInput').value = state.nai.height || 1216;
+  document.getElementById('naiTransparent').checked = !!state.nai.transparent;
+  document.getElementById('naiTransTol').value = state.nai.transTol || 28;
+  document.getElementById('tolValDisp').textContent = state.nai.transTol || 28;
+  document.getElementById('naiSmea').checked = state.nai.smea !== false;
+  document.getElementById('naiDyn').checked = !!state.nai.dyn;
+
+  if(state.imageMode){
+    document.getElementById('imageUploadPanel').classList.add('active');
+    document.getElementById('imageGenBtn').textContent = '关闭识图';
+    renderImagePreviews();
+  }
+
+  renderArtists();
+  renderThinkPrompts();
+  renderTags();
+  renderSizePresets();
+  renderResults();
+  renderStPresetUI();
+  updateConnectionStatus();
+  updateNaiCost();
+
+  if(state.currentPage === 'imggen'){
+    state.currentPage = 'prompt';
+    switchPage();
+  }
+  await loadSavedImagesFromDB();
+  updateScrollPadding();
+}
+document.addEventListener('DOMContentLoaded', init);
+window.addEventListener('resize', updateScrollPadding);
+</script>
+</body>
+</html>
